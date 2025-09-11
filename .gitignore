@@ -1,0 +1,9 @@
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*lol
+*.synctex.gz
+*.toc
+a.out
+from_friend
