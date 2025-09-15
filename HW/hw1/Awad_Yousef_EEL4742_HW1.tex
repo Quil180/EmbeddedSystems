@@ -1,0 +1,209 @@
+\documentclass{article}
+
+\usepackage{fancyhdr}
+\usepackage{extramarks}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amsfonts}
+\usepackage{tikz}
+\usepackage[plain]{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{CStyle}{
+	language=C++,
+	backgroundcolor=\color{backcolour},   
+	commentstyle=\color{codegreen},
+	keywordstyle=\color{magenta},
+	numberstyle=\tiny\color{codegray},
+	stringstyle=\color{codepurple},
+	basicstyle=\ttfamily\footnotesize,
+	breakatwhitespace=false,         
+	breaklines=true,                 
+	keepspaces=true,                 
+	numbers=left,       
+	numbersep=5pt,                  
+	showspaces=false,                
+	showstringspaces=false,
+	showtabs=false,                  
+	tabsize=2,
+}
+\lstset{style=CStyle}
+
+
+\usetikzlibrary{automata,positioning}
+
+%
+% Basic Document Settings
+%
+
+\topmargin=-0.45in
+\evensidemargin=0in
+\oddsidemargin=0in
+\textwidth=6.5in
+\textheight=9.0in
+\headsep=0.25in
+
+\linespread{1.1}
+
+\pagestyle{fancy}
+\lhead{Yousef Alaa Awad}
+\chead{\hmwkClass\: \hmwkTitle}
+\rhead{\firstxmark}
+\lfoot{\lastxmark}
+\cfoot{\thepage}
+
+\renewcommand\headrulewidth{0.4pt}
+\renewcommand\footrulewidth{0.4pt}
+
+\setlength\parindent{0pt}
+
+%
+% Create Problem Sections
+%
+
+\setcounter{secnumdepth}{0}
+\newcounter{partCounter}
+\newcounter{homeworkProblemCounter}
+\setcounter{homeworkProblemCounter}{1}
+
+\newcommand{\hmwkTitle}{Homework\ \#1}
+\newcommand{\hmwkDueDate}{September 14, 2025}
+\newcommand{\hmwkClass}{Embedded Systems}
+
+%
+% Title Page
+%
+
+\title{
+    \vspace{2in}
+    \textmd{\textbf{\hmwkClass:\ \hmwkTitle}}\\
+    \normalsize\vspace{0.1in}
+    \vspace{3in}
+}
+
+\author{Yousef Alaa Awad}
+
+% Problems start here
+\begin{document}
+
+\maketitle
+\pagebreak
+
+\section{1}
+\textbf{Given:} For the questions below, write the code using the masks that are pre-defined in the header file. Perform the operations below on the 8-bit variable (uint\_8t data).
+
+\subsection{A) Write code that independently sets bit5, clears bit5, and inverts bit5}
+\begin{lstlisting}
+data |= BIT5;  // Ensuring BIT5 is on.
+data &= ~BIT5; // Setting BIT5 to 0, but leaving the rest the same
+data ^= BIT5;  // Inverting only BIT5.
+\end{lstlisting}
+
+\subsection{B) Write code that independently sets bit2 and bit3, clears bit2 and bit3, inverts bit2 and bit3, and sets bit2 and clears bit3}
+\begin{lstlisting}
+data |= (BIT2 | BIT3);        // Setting bit2 and bit3
+data &= ~(BIT2 | BIT3);       // Clearing bit2 and bit3
+data ^= (BIT2 | BIT3);        // Inverting bit2 and bit3
+data = (data | BIT2) & ~BIT3; // Setting bit2 and clearing bit3
+\end{lstlisting}
+
+\subsection{C) Write an if-condition line that independently checks if bit4 is 1, checks if bit4 is 0, checks if bits4 and 5 are both 1, checks if bit4 is 0 and bit5 is 1, and checks if bits 4 and 5 are both 0}
+The following are just snippets
+\begin{lstlisting}
+if (!(data & BIT4)) // Checks if bit4 is 1 by only leaving bit4 via the &
+
+if (data & BIT4) // Checks if bit4 is 0
+
+if (!(data & (BIT4 | BIT5))) // Checks if bit4 and bit5 are 1
+
+if ((data & BIT4) && !(data & BIT5)) // Checks if bit4 is 0 and bit5 is 1
+
+if (data & (BIT4 | BIT5)) // Checks if bit4 and bit5 are both 0
+\end{lstlisting}
+
+\section{2}
+\textbf{Given: } A module on the microcontroller is configured using a control register called CTL that haas the format shown below.
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        SLP & CLK & CAP & IE \\
+        2 bits & 3 bits & 2 bits & 1 bit \\
+        \hline
+    \end{tabular}
+\end{table}
+\begin{itemize}
+	\item SLP: Selects sleep mode (0-3)
+	\item CLK: Selects clock speed (0-7)
+	\item CAP: Selects built-in capacitor value (0-3)
+	\item IE: Interrupt enable bit (0/1)
+\end{itemize}
+
+\subsection{A) Write a line that configures: Sleep mode 3, clock speed 4, capacitor value 1, and interrupts enabled}
+\begin{lstlisting}
+CTL = (SLP_3 |  CLK_4 | CAP_1 | IE);
+\end{lstlisting}
+
+\subsection{B) Using Part A, show the masks used and the final value of CTL in binary}
+The following are the original masks:
+\begin{itemize}
+	\item SLP\_3 = 1100 0000
+	\item CLK\_4 = 0010 0000
+	\item CAP\_1 = 0000 0010
+	\item IE\ \ \ \ \ \ \ = 0000 0001
+\end{itemize}
+Therefore, the total mask will look like the following
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+				11 & 100 & 01 & 1\\
+        \hline
+    \end{tabular}
+\end{table}
+\newline
+or \textbf{1110 0011}.
+
+\subsection{C) Write a piece of code that changes SLP to 1 from any unknown value of SLP}
+\begin{lstlisting}
+CLT = (CTL & ~SLP_1) | SLP_1;
+\end{lstlisting}
+
+\subsection{D) Write an if-condition that checks if SLP is 3}
+\begin{lstlisting}
+if ((CTL & SLP_3) == SLP_3)
+\end{lstlisting}
+
+\subsection{E) Write an if-condition that checks if the current value of CLK is 0, 2, 4, or 6}
+\begin{lstlisting}
+if ((CTL & CLK_1) != CLK_1)
+\end{lstlisting}
+
+\section{3}
+\subsection{A) A memory is byte addressable and has an 18-bit address. All the addresses are value, what is the total size of the memory?}
+First, with a 18-bit long address bus, we know that there are $2^18$ possible addresses. Alongside this, since each address is simply 1 byte, we know that there are $2^18$ bytes. Therefore we have the following math...
+$$ 2^{18}\ \text{addresses} = 2^{18}\ \text{bytes} = 2^{10}*2^8\ \text{bytes} = 2^8\ \text{kilobytes} = 256\ \text{kilobytes}$$
+
+\subsection{B) A memory is byte addressable and has a total size of 17,408 bytes (17KB). What is the smallest address size that can be used for this memory?}
+With 17KB of memory, you have $2^4+1$ kilobytes, of which is $2^{10}*(2^4 + 1)$ bytes of which is $2^{14}+2^{10}$ bytes of which means we have 14 whole bits of space, alongside another full 1024 addresses needed. Meaning we need \textbf{15} bits of an address bus to accomodate 17KB of memory.
+
+\section{4}
+\subsection{A) A microcontroller's memory map allocates the FLASH code space to the address range 0x0500 to 0x0CFF. What is the code size, in bytes, that is supported by this microcontroller?}
+$$ 0xCFF - 0x500 = 0x7FF \rightarrow 0x7FF = 2047 \rightarrow 2047 + 1\text{ (for base)} = 2048\text{ Bytes} = 2\text{KB} $$
+
+\subsection{B) The vector table contains memory addresses (a vector is memory address). In a certain MSP430 device, the vector table is in the range 0xFFC0 to 0cFFFF. The memory address is 16-bit. How many vectors does this vector table support?}
+\begin{itemize}
+	\item $ 0xFFFF-0xFFC0 = 0x003F $
+ 	\item $ 0xx003F = 16^1*3 + 16^0*15 = 63 $
+	\item $ 16 + 1\text{ (for base)} = 64$
+	\item $ \frac{64}{2}\text{ 2 bytes per vector} = \textbf{32 vectors}$ 
+\end{itemize}
+
+\end{document}
