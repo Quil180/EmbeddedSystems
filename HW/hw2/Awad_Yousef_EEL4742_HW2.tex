@@ -1,0 +1,141 @@
+\documentclass{article}
+
+\usepackage{fancyhdr}
+\usepackage{extramarks}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amsfonts}
+\usepackage{tikz}
+\usepackage[plain]{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{CStyle}{
+	language=C++,
+	backgroundcolor=\color{backcolour},   
+	commentstyle=\color{codegreen},
+	keywordstyle=\color{magenta},
+	numberstyle=\tiny\color{codegray},
+	stringstyle=\color{codepurple},
+	basicstyle=\ttfamily\footnotesize,
+	breakatwhitespace=false,         
+	breaklines=true,                 
+	keepspaces=true,                 
+	numbers=left,       
+	numbersep=5pt,                  
+	showspaces=false,                
+	showstringspaces=false,
+	showtabs=false,                  
+	tabsize=2,
+}
+\lstset{style=CStyle}
+
+
+\usetikzlibrary{automata,positioning}
+
+%
+% Basic Document Settings
+%
+
+\topmargin=-0.45in
+\evensidemargin=0in
+\oddsidemargin=0in
+\textwidth=6.5in
+\textheight=9.0in
+\headsep=0.25in
+
+\linespread{1.1}
+
+\pagestyle{fancy}
+\lhead{Yousef Alaa Awad}
+\chead{\hmwkClass\: \hmwkTitle}
+\rhead{\firstxmark}
+\lfoot{\lastxmark}
+\cfoot{\thepage}
+
+\renewcommand\headrulewidth{0.4pt}
+\renewcommand\footrulewidth{0.4pt}
+
+\setlength\parindent{0pt}
+
+%
+% Create Problem Sections
+%
+
+\setcounter{secnumdepth}{0}
+\newcounter{partCounter}
+\newcounter{homeworkProblemCounter}
+\setcounter{homeworkProblemCounter}{1}
+
+\newcommand{\hmwkTitle}{Homework\ \#2}
+\newcommand{\hmwkClass}{Embedded Systems}
+
+%
+% Title Page
+%
+
+\title{
+    \vspace{2in}
+    \textmd{\textbf{\hmwkClass:\ \hmwkTitle}}\\
+    \normalsize\vspace{0.1in}
+    \vspace{3in}
+}
+
+\author{Yousef Alaa Awad}
+
+% Problems start here
+\begin{document}
+
+\maketitle
+\pagebreak
+
+\section{1}
+\textbf{Given:} For Timer\_A, answer the following questions.
+
+\subsection{A) Timer A is using a 100 KHz (100,000 Hz) clock signal. What is the timer’s period (in seconds) if the continuous mode is used? Give the answer for all values of ID (Input Divider).}
+
+
+
+\subsection{B) Timer A is using a 100 KHz (100,000 Hz) clock signal. We’re aiming at a timer period of 0.1 seconds using the up mode. Find suitable values of TACCR0 and ID (Input Divider). \textit{Give all the possible solutions.}}
+
+\section{2}
+\textbf{Given:} For Timer\_A, answer the following questions.
+
+\subsection{A) Timer A is using ACLK configured to a 32 KHz (32,768 Hz) crystal. What is the timer period if the continuous mode is used? Give the answer for all the values of ID (Input Divider).}
+
+\subsection{B) Timer A is using an 5 MHz (5,000,000 Hz) clock signal. Can we configure the timer to (directly) generate a delay of 0.5 seconds? Show your analysis.}
+
+\section{3}
+\textbf{Given:} For manual delay insertion using loops, answer the following questions.
+
+\subsection{A) How many bits is an integer (int) n the C language?}
+
+\subsection{B) A programmer wrote a software delay loop that counts the variable (unsigned int counter) from 0 up to 45,000 to create a small delay. If the user wishes to double the delay, can they simply increase the upperbound to 90,000? If not, explain why?}
+
+\subsection{C) If your answer to (Part B) is \textit{No}, what alternative solution can be used for this specific scenario. \textit{Give all the possible solutions.}}
+
+\section{4}
+\textbf{Given:} Timer A is in up mode with a clock source of ACLK (32.768 kHz) and a clock divider of 8. The compare register (CCR0) is set to 500. Both TAIE and CCIE for CCR0 are enabled. TAIFG has a priority of 2, while the CCR0 (CCIFG) interrupt has a priority of 1. Answer the following questions.
+
+\subsection{A) Calculate how often the TAIFG and CCIFG interrupts will be triggered (actual time).}
+
+\subsection{B) If both interrupts occur at the same time, which interrupt will be serviced first? Explain why.}
+
+\subsection{C) If the clock divider is changed to 32 while keeping all other settings the same, how will the interrupt timing change? Recalculate the new interrupt period for TAIFG and CCIFG.}
+
+\section{5}
+\textbf{Given:} Timer\_A is in continuous mode with SMCLK (1 MHz) as the clock source and no clock division. The compare register CCR1 is set to 30,000, and both TAIE and CCIE are enabled. The CPU is put into low-power mode (LPM3). Answer the following questions.
+
+\subsection{A) Explain what will happen when TAR reaches CCR1 and then overflows.}
+
+\subsection{B) If you want the CPU to wake up and handle both the CCR1 compare interrupt and the overflow interrupt, how would you modify the system configuration to achieve this?}
+
+\subsection{C) Calculate how long the CPU will stay in low-power mode before it wakes up to handle the CCR1 interrupt if you reconfigure the system correctly.}
+
+\end{document}

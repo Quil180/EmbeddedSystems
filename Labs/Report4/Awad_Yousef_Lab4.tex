@@ -1,0 +1,94 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{varwidth}
+\usepackage{xcolor}
+\usepackage{listings}
+
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{CStyle}{
+	language=C++,
+	backgroundcolor=\color{backcolour},   
+	commentstyle=\color{codegreen},
+	keywordstyle=\color{magenta},
+	numberstyle=\tiny\color{codegray},
+	stringstyle=\color{codepurple},
+	basicstyle=\ttfamily\footnotesize,
+	breakatwhitespace=false,         
+	breaklines=true,                 
+	keepspaces=true,                 
+	numbers=left,       
+	numbersep=5pt,                  
+	showspaces=false,                
+	showstringspaces=false,
+	showtabs=false,                  
+	tabsize=2,
+}
+\lstset{style=CStyle}
+
+\title{Lab 4 Report \\ \large EEL4742C - 00446}
+\author{Yousef Awad}
+\date{September 2025}
+\setcounter{secnumdepth}{0}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Introduction}
+I don't have time for this, sorry :(
+
+\section{4.1 Timer's Continuous Mode with Interrupt}
+The period of interrupts that I will see will be when the timer overflows or:
+$$ \frac{65536\ cycles}{32768\ \frac{cycles}{second}} = 2\ seconds $$
+After checking this time with my phone, it lined up almost perfectly with slight error due to my hand not reacting as fast as it should have (I have a bad reaction time). If we do not clear the flag each time an interrupt occurs, then the ISR conditions will always occur forever, leading to the led constantly turning on and off, and never leaving the ISR function therefore breaking the purpose of the interrupt to begin with. Now, when the CPU is between interrupts, the CPU simply just idles and does nothing due to the forever loop in main. Now, as told before, the ISR is only called when the hardware signals that the timer overflows, therefore setting the TAIFG flag.
+\lstinputlisting{4_1.c}
+
+\section{4.2 Timer’s Up Mode with Interrupt}
+Thankfully, the timing of the stopwatch lines up almost perfectly with the expected timing of the LEDs toggling, just as it did before. Alongside this, the TAIE doesn't need to be set to 1 as we are simply using the Capture and Compare registers meaning we use CCIE as 1 instead. For our ISR flag, we should clear channel 0, and do, due to the fact that this is the channel that the timer uses. If that channel is not cleared, then the ISR will therefore never be exited (uh oh!!). To change the code to 0.5 seconds or even 0.1, I would need to change the TA0CCR0 to 16384 or 3276 respectively.
+\lstinputlisting{4_2.c}
+
+\section{4.3 Push Button with Interrupt}
+The code \textit{does not} work flawlessly sadly. It sadly has issues when the button presses are too close together leading to a staggered and/or awkward input and output delays/occurances. For me, the success rate is about 85\% or $\frac{34}{40}$.
+\lstinputlisting{4_3.c}
+
+\section{4.4 Low-Power Modes}
+I chose to use low power mode 3 for all three revisions due to the fact that it is the lowest mode that still enables the auxillary clock that we need to ensure that flags are enabled using the timer. The only pieces of code that I changed was...
+\begin{lstlisting}
+_enable_interrupts();
+\end{lstlisting}
+to the following...
+\begin{lstlisting}
+_low_power_3();
+\end{lstlisting}
+
+\section{4.5 Application: Crawler Guidance System}
+For what I've written below, I've set up a timer that uses the auxillary clock in up mode, with the TAR cleared by default, and the Capture and Command Interrupt Enable set to true. I specifically set up TA0CCR0 to be 32767 so that the flag raises every 1 second. Alongside this, I cleared TAIFG flag as well as enabled the low power mode 3. To track states I used an enum to track the state, so as to make my life easier and label things with words. This therefore made it so that when the button is pressed, it first turns off the LEDs, then checks the state and switches it up or down accordingly, then sets the correct TA0CCR0 for next flashing LED (either green or red or magical purple, right??????). After this, I reset the timer, and flags so that it can continue on its journey cycling infinitely through the states.
+\lstinputlisting{4_5.c}
+
+\section{Student Q\&A}
+\subsection{1}
+Using low power mode makes it so that the CPU can suspend its operations and stop drawing power when compared to never using low power mode, of which means the CPU is always on and polling devices/pins. This, therefore, makes the entire board and application more power efficient whenever power draw is a conceern. In between each interrupt the CPU will simply just be waiting for an interrupt flag to occur, do the task the interrupt flag wished to happen, then clear the flag.
+
+\subsection{2}
+It will be found in the \textit{<MSP430FR6989.h>} header file. In our case, we'd want the vector name to be ADC12\_VECTOR.
+
+\subsection{3}
+The programmer is responsible for clearing the interrupt flags. The CPU only does what the programmer tells it, it does not assume any instructions.
+
+\subsection{4}
+Again, the programmer is the one responsible for clearing the interrupt flag. It's always the programmer's fault.
+
+\subsection{5}
+We can remame the ISR function to anything we want. The only thing that must be constant is the \textit{\#pragma} vector declaration followed by the \_\_interrupt return type function below it.
+
+\subsection{6}
+If the ISR was supposed to cleanup the flag and did not, then the ISR will not leave from its state, making the CPU most likely, never returning back to the Low Power Mode/State, assuming it was in one to begin with. As well as that quite glaring problem, any other expected functionality of the ISR most likely wil not trigger as any further interrupts will not be checked/raised, thereby causing an indefinate stutter.
+
+\end{document}
