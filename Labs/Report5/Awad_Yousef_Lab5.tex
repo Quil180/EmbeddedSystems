@@ -1,0 +1,76 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{varwidth}
+\usepackage{xcolor}
+\usepackage{listings}
+
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{CStyle}{
+	language=C++,
+	backgroundcolor=\color{backcolour},   
+	commentstyle=\color{codegreen},
+	keywordstyle=\color{magenta},
+	numberstyle=\tiny\color{codegray},
+	stringstyle=\color{codepurple},
+	basicstyle=\ttfamily\footnotesize,
+	breakatwhitespace=false,         
+	breaklines=true,                 
+	keepspaces=true,                 
+	numbers=left,       
+	numbersep=5pt,                  
+	showspaces=false,                
+	showstringspaces=false,
+	showtabs=false,                  
+	tabsize=2,
+}
+\lstset{style=CStyle}
+
+\title{Lab 5 Report \\ \large EEL4742C - 00446}
+\author{Yousef Awad}
+\date{September 2025}
+\setcounter{secnumdepth}{0}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Introduction}
+
+\section{5.1 Printing on the LCD Display}
+\lstinputlisting{5_1.c}
+
+\section{5.2 Implementing a Counter}
+When comparing the time on the counter for 5.2 that I've made it almost perfectly matches it, with the error most likely being due to human error and my own response time.
+\lstinputlisting{5_2.c}
+
+\section{5.3 Utility Chronometer}
+Just to get this out of the way, the maximum design of my chronometer is that of 12 hours like an AM/PM clock. This is due to the fact that I put the max value that the counter, in seconds, will go to, to be 43199. Now, onto the design. I basically redid the entirety of the 5.2 and 5.1, mainly due to the fact that I started with 5.3 and went backward in writing the code. I specifically chose to make the buttons work via polling once they are already activated, mainly due to the fact that it's just a lot easier for me, and energy consumption is not of a concern. Alongside this, I used a couple of while loops so that the speed-up function of the buttons can be easily looped indefinetely until they are released. That's really it, that's different about the versions from 5.2 and 5.1, when compared to 5.3.
+\lstinputlisting{5_3.c}
+
+\section{Student Q\&A}
+\subsection{1}
+\textbf{Given:} Explain whether this statement is true or false. If false, explain the correct operation. “An LCD segment works just like a colored LED. It’s turned on/off by writing either digital high/low to it, respectively”.
+\newline
+\newline
+The statement is true. It works the exact same way as an LED, its just that you have more than one LED to turn on and off at a given frequency (as it's not always on, and instead flickers extremely fast so as to conserve energy).
+
+\subsection{2}
+\textbf{Given:} What is the name of the LCD controller that interfaces the LCD display of our board? Is the LCD controller located on the display module or in the microcontroller?
+\newline
+\newline
+The LCD controller is specifically located inside the MCU of the MSP430, specifically it is called 'LCD\_C'.
+
+\subsection{3}
+\textbf{Given:} In what multiplexing configuration is the LCD module wired (2-way, 4-way, etc)? What does this mean regarding the number of pins used at the microcontroller?
+\newline
+\newline
+The LCD is wired in 4-way multiplexing so as to conserve the amount of pins that the microcontroller needs by a factor of 4. Since we have a 108 segment display, this therefore means we only need 27 pins to write the high/low values to the entirety of said display.
+
+\end{document}
