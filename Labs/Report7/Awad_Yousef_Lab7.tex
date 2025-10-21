@@ -30,7 +30,7 @@
 }
 \lstset{style=CStyle}
 
-\title{Lab 6 Report \\ \large EEL4742C - 00446}
+\title{Lab 7 Report \\ \large EEL4742C - 00446}
 \author{Yousef Awad}
 \date{September 2025}
 \setcounter{secnumdepth}{0}
@@ -42,56 +42,35 @@
 \newpage
 
 \section{Introduction}
-In this lab, we learned how to use the UART module on the MSP430 as well as what UART is generally, via programming the backchannel UART link that connects the board to the PC of use.
+In this lab, we learned how to use the I2C module on the MSP430 as well as what I2C is generally, via programming the I2C link that connects the board to the booster pack that we put on it.
 
-\section{6.1 Transmitting Data over UART}
-\lstinputlisting{6_1.c}
+\section{7.1 I2C Transmission}
+\lstinputlisting{7_1.c}
 \pagebreak
-\section{6.2 Transmitting Integers \& Strings over UART}
-\lstinputlisting{6_2.c}
+\section{7.2 Reading Measurements from the Light Sensor}
+\lstinputlisting{7_2.c}
 \pagebreak
-\section{6.3 Modifying the UART Configuration}
-\lstinputlisting{6_3.c}
+\section{7.3 Application: Lux Logger}
+\lstinputlisting{7_3.c}
 \pagebreak
-\section{6.4 Application: Airport Runway Control}
-\lstinputlisting{6_4.c}
 \pagebreak
 \section{Student Q\&A}
 \subsection{1}
-\textbf{Given:} What’s the difference between UART and eUSCI?
+\textbf{Given:} The light sensor has an address pin that allows customizing the I2C address. How many addresses are possible? What are they and how are they configured? Look in the sensor’s data sheet.
 \newline
 \newline
-UART is a general serial protocol while the eUSCI is an above wrapper that can do UART, SPI, and I2C. It encompasses and enables all 3 forms of communication.
+NEED TO ANSWER
 
 \subsection{2}
-\textbf{Given:} What is the backchannel UART?
+\textbf{Given:} According to the light sensor’s data sheet, what should be the value of the pull-up resistors on the I2C wires? Did the BoosterPack use the same values?
 \newline
 \newline
-The backchannel UART is connected to the eUSCI module 1 in channel A.
+NEED TO ANSWER
 
 \subsection{3}
-\textbf{Given:} What’s the function of the two lines of code that have P3SEL1 and P3SEL0?
+\textbf{Given:} What I2C clock frequency do each of the eUSCI module and the sensor support?
 \newline
 \newline
-These lines specifically change the pin multiplexers that allow you to use the UART module externally.
-
-\subsection{4}
-\textbf{Given:} The microcontroller has a clock at the frequency of 1,000,000 Hz and we’re aiming to setup a UART connection at 9600 baud. How do we obtain a clock rate of 9600 Hz? Explain the approach at a high level.
-\newline
-\newline
-When referencing the reference manual for the MSP430, we are shown a table that gives us the recommended values of the registers for given inputs and output frequencies. In that table it states what each register should be given if you want oversampling or not.
-
-\subsection{5}
-\textbf{Given:} A UART transmitter is transmitting data at at 1200 baud. What is receiver’s clock frequency if oversampling is not used?
-\newline
-\newline
-The reciever clock will have the exact same frequency as the transmitter, therefore it is 1200Hz.
-
-\pagebreak
-\subsection{6}
-\textbf{Given:} A UART transmitter is transmitting data at at 1200 baud. What is receiver’s clock frequency if oversampling is used? What’s the benefit of oversampling?
-\newline
-\newline
-It depends on the amount of oversampling that can even be configured on the reciever. Assumingn we use a default of 16x oversampling, then the hclock rate would be 19,200Hz. The reason we oversample to begin with is to compensate for any offsets or drifts in the transmitter clock over time as well as to eliminate as much noise in the signal given out by averaging the reads of the signal over multiple samples.
+NEED TO ANSWER
 
 \end{document}
