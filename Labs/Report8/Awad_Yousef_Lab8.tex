@@ -1,0 +1,65 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{varwidth}
+\usepackage{xcolor}
+\usepackage{listings}
+
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{CStyle}{
+	language=C++,
+	backgroundcolor=\color{backcolour},   
+	commentstyle=\color{codegreen},
+	keywordstyle=\color{magenta},
+	numberstyle=\tiny\color{codegray},
+	stringstyle=\color{codepurple},
+	basicstyle=\ttfamily\footnotesize,
+	breakatwhitespace=false,         
+	breaklines=true,                 
+	keepspaces=true,                 
+	numbers=left,       
+	numbersep=5pt,                  
+	showspaces=false,                
+	showstringspaces=false,
+	showtabs=false,                  
+	tabsize=2,
+}
+\lstset{style=CStyle}
+
+\title{Lab 8 Report \\ \large EEL4742C - 00446}
+\author{Yousef Awad}
+\date{October 2025}
+\setcounter{secnumdepth}{0}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Introduction}
+
+\section{8.1 Using the ADC SAR-Type}
+\lstinputlisting{8_1.c}
+\pagebreak
+
+\section{8.2 Reading the X- and Y- Coordinates of the Joystick}
+\lstinputlisting{8_2.c}
+\pagebreak
+
+\section{8.3 Application: Platform Balancing Control}
+\lstinputlisting{8_3.c}
+\pagebreak
+
+\section{Student Q\&A}
+\subsection{1}
+\textbf{Given:} \textit{How many cycles does it take the ADC to convert a 12-bit result? (look in the configuration register that contains ADC12RES).}
+
+\subsection{2}
+\textbf{Given:} \textit{In this experiment, we set our reference voltages $VR+ = AV CC$ (Analog Vcc) and $VR- = AV SS$ (Analog Vss). What voltage values do these signals have? Look in the MCU data sheet (slas789c) in Table 5.3. Assume that Vcc=3.3V and Vss=0.}
+
+\end{document}
