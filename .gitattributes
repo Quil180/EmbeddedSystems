@@ -1,0 +1,2 @@
+slau367p_msp430_datasheet.pdf filter=lfs diff=lfs merge=lfs -text
+slaz517ag_msp430_simple_datasheet.pdf filter=lfs diff=lfs merge=lfs -text
