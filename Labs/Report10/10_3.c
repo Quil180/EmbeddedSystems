@@ -1,301 +1,144 @@
-// Part 9.3 Code ---------------------------
-#include "Grlib/grlib/grlib.h"    // Graphics library (grlib)
-#include "LcdDriver/lcd_driver.h" // LCD driver
 #include "msp430fr6989.h"
-#include <math.h>
-#include <stdio.h>
 
-#define redLED BIT0
-#define greenLED BIT7
-#define S1 BIT1
-#define S2 BIT2
+#define PWM BIT0 // P1.0
+#define PWM_VAL 33
+#define UP 3500
+#define DOWN 600
 
-// For I2C
-#define MANUFACTURERIDREG 0x7E // Manufacturer Register ID
-#define DEVICEIDREG 0x7F       // Device Register ID
-#define I2CADDR 0x44           // I2C Address
-
-// For reading Sensor data
-#define CONFIGREG 0x01
-#define RESULTREG 0x00
-
-void Initialize_Clock_System() 
+// Configures ACLK to 32 KHz crystal
+void config_ACLK_to_32KHz_crystal()
 {
-  // DCO frequency = 16 MHz
-  // MCLK = fDCO/1 = 16 MHz
-  // SMCLK = fDCO/1 = 16 MHz
-  // Activate memory wait state
-  FRCTL0 = FRCTLPW | NWAITS_1; // Wait state=1
-  CSCTL0 = CSKEY;
-  // Set DCOFSEL to 4 (3-bit field)
-  CSCTL1 &= ~DCOFSEL_7;
-  CSCTL1 |= DCOFSEL_4;
-  // Set DCORSEL to 1 (1-bit field)
-  CSCTL1 |= DCORSEL;
-  // Change the dividers to 0 (div by 1)
-  CSCTL3 &= ~(DIVS2 | DIVS1 | DIVS0); // DIVS=0 (3-bit)
-  CSCTL3 &= ~(DIVM2 | DIVM1 | DIVM0); // DIVM=0 (3-bit)
-  CSCTL0_H = 0;
+  // By default, ACLK runs on LFMODCLK at 5MHz/128 = 39 KHz
+
+  // Reroute pins to LFXIN/LFXOUT functionality
+  PJSEL1 &= ~BIT4;
+  PJSEL0 |= BIT4;
+
+  // Wait until the oscillator fault flags remain cleared
+  CSCTL0 = CSKEY; // Unlock CS registers
+  do
+  {
+    CSCTL5 &= ~LFXTOFFG; // Local fault flag
+    SFRIFG1 &= ~OFIFG; // Global fault flag
+  }
+  while((CSCTL5 & LFXTOFFG) != 0);
+
+  CSCTL0_H = 0; // Lock CS registers
   return;
 }
 
-// I2C Initialization Function (for lux sensor)
-void Initialize_I2C(void)
+void Initialize_ADC(void) 
 {
-  // Configure the MCU in Master mode
-  // Configure pins to I2C functionality
-  // (UCB1SDA same as P4.0) (UCB1SCL same as P4.1)
-  // (P4SEL1=11, P4SEL0=00) (P4DIR=xx)
-  P4SEL1 |= (BIT1 | BIT0);
-  P4SEL0 &= ~(BIT1 | BIT0);
-  // Enter reset state and set all fields in this register to zero
-  UCB1CTLW0 = UCSWRST;
-  // Fields that should be nonzero are changed below
-  // (Master Mode: UCMST) (I2C mode: UCMODE_3) 
-  // (Synchronous mode: UCSYNC)
-  // (UCSSEL 1:ACLK, 2,3:SMCLK)
-  UCB1CTLW0 |= UCMST | UCMODE_3 | UCSYNC | UCSSEL_3;
-  // Clock frequency: 16 MHz, 16M/320K =
-  UCB1BRW = 50;
-  // Chip Data Sheet p. 53 (Should be 400 KHz max)
-  // Exit the reset mode at the end of the configuration
-  UCB1CTLW0 &= ~UCSWRST;
+  // Configure the pins to analog functionality
+  // X-axis: A10/P9.2, for A10 (P9DIR=x, P9SEL1=1, P9SEL0=1)
+  P9SEL1 |= BIT2;
+  P9SEL0 |= BIT2;
+  // Turn on the ADC module
+  ADC12CTL0 |= ADC12ON;
+  // Turn off ENC (Enable Conversion) bit while modifying the configuration
+  ADC12CTL0 &= ~ADC12ENC;
+  //*************** ADC12CTL0 ***************
+  // ADC12SHT0x sets SHT cycles for results 0-7, 24-31
+  // ADC12MSC sets multiple analog inputs
+  // Sets SHT of 16 cycles (found in doc. slau367o table 34.4)
+  ADC12CTL0 |= ADC12SHT0_2; 
+  //*************** ADC12CTL1 ***************
+  // ADC12SHS sets read trigger
+  // ADC12SHP sets SAMPCON use
+  /// ADC12DIV sets clock divider
+  // ADC12SSEL sets clock base
+  // ADC12CONSEQx sets conversion sequence mode
+  ADC12CTL1 |= ADC12SHS_0;  // 0 = ADC12SC bit
+  ADC12CTL1 |= ADC12SHP;    // 1 = SAMPCON sourced from clock
+  ADC12CTL1 |= ADC12DIV_0;  // 0 = /1
+  ADC12CTL1 |= ADC12SSEL_0; // 0 = MODOSC
+  // ADC12CTL1 |= ADC12CONSEQ_1;
+  // values in doc. slau367o table 34.5
+  //*************** ADC12CTL2 ***************
+  // ADC12RES sets bit resolution
+  // ADC12DF sets data format
+  ADC12CTL2 |= ADC12RES_2; // 2 = 12-bit
+  ADC12CTL2 &= ~ADC12DF;   // 0 = unsigned binary
+  //*************** ADC12MCTL0 ***************
+  // ADC12VRSELx sets VR+ and VR- sources as well as buffering
+  // ADC12INCHx sets analog input
+  ADC12MCTL0 |= ADC12VRSEL_0; // 0 -> VR+ = AVCC and VR- = AVSS
+  ADC12MCTL0 |= ADC12INCH_10; // 10 = A10 input
+  //*************** ADC12MCTL1 ***************
+  // set ENC bit at end of config
+  ADC12CTL0 |= ADC12ENC;
 }
 
-// Read a word (2 bytes) from I2C (address, register)
-int i2c_read_word(unsigned char i2c_address,
-                  unsigned char i2c_reg,
-                  unsigned int *data)
+int main(void)
 {
-  // Intialize to ensure successful
-  unsigned char byte1 = 0;
-  unsigned char byte2 = 0; 
-  reading UCB1I2CSA = i2c_address;    // Set address
-  UCB1IFG &= ~UCTXIFG0;
-  // Transmit a byte (the internal register address)
-  UCB1CTLW0 |= UCTR;
-  UCB1CTLW0 |= UCTXSTT;
-  while ((UCB1IFG & UCTXIFG0) == 0) 
-  {
-    // Wait for flag to raise
-  } 
-  UCB1TXBUF = i2c_reg; // Write in the TX buffer
-  while ((UCB1IFG & UCTXIFG0) == 0) 
-  {
-    // Buffer copied to shift
-  } 
-  register;
-  // Tx in progress; set Stop bit
-  // Repeated Start
-  UCB1CTLW0 &= ~UCTR;
-  UCB1CTLW0 |= UCTXSTT;
-  // Read the first byte
-  while ((UCB1IFG & UCRXIFG0) == 0)
-  {
-    // Wait for flag to raise
-  }
-  byte1 = UCB1RXBUF;
-  // Assert the Stop signal bit before receiving the last byte
-  UCB1CTLW0 |= UCTXSTP;
-  // Read the second byte
-  while ((UCB1IFG & UCRXIFG0) == 0) 
-  {
-    // Wait for flag to raise
-  }
-  byte2 = UCB1RXBUF;
-  while ((UCB1CTLW0 & UCTXSTP) != 0) 
-  {
-    // wait
-  }
-  while ((UCB1STATW & UCBBUSY) != 0) 
-  {
-    // wait
-  }
-  *data = (byte1 << 8) | (byte2 & (unsigned int)0x00FF);
-  return 0;
-}
-
-// Write a word (2 bytes) to I2C (address, register)
-int i2c_write_word(unsigned char i2c_address, 
-                   unsigned char i2c_reg,
-                   unsigned int data)
-{
-  unsigned char byte1, byte2;
-  UCB1I2CSA = i2c_address;    // Set I2C address
-  byte1 = (data >> 8) & 0xFF; // MSByte
-  byte2 = data & 0xFF;        // LSByte
-  UCB1IFG &= ~UCTXIFG0;
-  // Write 3 bytes
-  UCB1CTLW0 |= (UCTR | UCTXSTT);
-  while ((UCB1IFG & UCTXIFG0) == 0) 
-  {
-  }
-  UCB1TXBUF = i2c_reg;
-  while ((UCB1IFG & UCTXIFG0) == 0) 
-  {
-  }
-  UCB1TXBUF = byte1;
-  while ((UCB1IFG & UCTXIFG0) == 0) 
-  {
-  }
-  UCB1TXBUF = byte2;
-  while ((UCB1IFG & UCTXIFG0) == 0)
-  {
-  }
-  UCB1CTLW0 |= UCTXSTP;
-  while ((UCB1CTLW0 & UCTXSTP) != 0) 
-  {
-  }
-  while ((UCB1STATW & UCBBUSY) != 0)
-  {
-  }
-  return 0;
-}
-
-// Initializing Sensor
-void Initialize_SENS() 
-{
-  // Configuration for Sensor based on lab manual
-  unsigned volatile int configuration_value = 0x7604;
-  i2c_write_word(I2CADDR, CONFIGREG, configuration_value);
-}
-
-void main(void) 
-{
-  char mystring[20];
   // Configure WDT & GPIO
   WDTCTL = WDTPW | WDTHOLD;
   PM5CTL0 &= ~LOCKLPM5;
-  // Configure LEDs
-  P1DIR |= redLED;
-  P9DIR |= greenLED;
-  P1OUT &= ~redLED;
-  P9OUT &= ~greenLED;
-  // Configure buttons
-  P1DIR &= ~(S1 | S2);
-  P1REN |= (S1 | S2);
-  P1OUT |= (S1 | S2);
-  P1IFG &= ~(S1 | S2); // Flags are used for latched polling
-  // Set the LCD backlight to highest level
-  // P2DIR |= BIT6;
-  // P2OUT |= BIT6;
 
-  // Configure clock system
-  Initialize_Clock_System();
+  // Configure PWM
+  P1DIR  |= PWM;
+  P1SEL1 &= ~PWM;
+  P1SEL0 |= PWM;
 
-  // Initializing the I2C
-  Initialize_I2C();
+  config_ACLK_to_32KHz_crystal();
 
-  // Initializing Sensor with new function based on configuration
-  Initialize_SENS();
+  TA0CCR0  = 33;  // 33 cycles for 1000Hz
+  TA0CCTL0 = CCIE; // Enabling channel 0 interrupt
 
-  // Graphics functions
-  Graphics_Context g_sContext;        // Declare a graphic library
-  context Crystalfontz128x128_Init(); // Initialize the display
-  // Set the screen orientation
-  Crystalfontz128x128_SetOrientation(0);
-  // Initialize the context
-  Graphics_initContext(&g_sContext, &g_sCrystalfontz128x128);
-  // Set background and foreground colors
-  Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_BLACK);
-  Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
-  // Set the default font for strings
-  GrContextFontSet(&g_sContext, &g_sFontFixed6x8);
-  // Clear the screen
-  Graphics_clearDisplay(&g_sContext);
+  TA0CCR1  = 15; // 50% brightness
+  TA0CCTL1 = OUTMOD_7; // Reset/Set Output Mode
+  
+  //       ACLK       /1     Up     Clear TAR
+  TA0CTL = TASSEL_1 | ID_0 | MC_1 | TACLR;
 
-  // Set up Optical Counter Display
-  sprintf(mystring, "Optical Counter");
-  // show "Optical Sensor"
-  Graphics_drawStringCentered(&g_sContext,
-                              mystring,
-                              AUTO_STRING_LENGTH,
-                              64, 
-                              40,
-                              OPAQUE_TEXT);
-  Graphics_setForegroundColor(&g_sContext,
-                              GRAPHICS_COLOR_GOLDENROD);
-  sprintf(mystring, "lux");
-  // show "lux"
-  Graphics_drawStringCentered(&g_sContext,
-                              mystring, 
-                              AUTO_STRING_LENGTH, 
-                              90, 
-                              80,
-                              OPAQUE_TEXT);
-  // Make rectangular outline for optical sensor value
-  Graphics_setForegroundColor(&g_sContext,
-                              GRAPHICS_COLOR_GOLDENROD);
-  const Graphics_Rectangle RectLoc = {
-      .xMin = 10, .yMin = 100,
-      .xMax = (128 - 10), .yMax = (100 + 10)
-  };
-  Graphics_drawRectangle(&g_sContext, &RectLoc);
-  int LUX_Val = 0;
-  int Object_Counter = 0;
-  char str[5];
-  bool update_object_num = 0;
-  while (1) 
+  // Initializing ADC
+  Initialize_ADC();
+
+  _low_power_mode_3(); // We only need ACLK
+
+  unsigned int x;
+  unsigned int y;
+
+  for (;;)
   {
-    // Storing sensor value based on value in result
-    // reg and lux reading from sensor
-    i2c_read_word(I2CADDR, RESULTREG, &LUX_Val);
-    // make counter purple
-    Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_RED);
-    LUX_Val = LUX_Val * 1.28;
-    if (LUX_Val >= 1000) 
+    ADC12CTL0 |= ADC12SC;
+
+    while (ADC12CTL0 & ADC12BUSY)
     {
-      LUX_Val = 1000; // Caps LUX_Val at 1000 (based on manual)
+      // Wait till not busy
     }
-    if ((LUX_Val <= 200) && (update_object_num == 0)) 
+
+    x = ADC12MEM0;
+    y = ADC12MEM1;
+
+    if (y > UP)
     {
-      // For object, count the object
-      detection Object_Counter++;
-      update_object_num = 1;
-    } 
-    else if ((LUX_Val > 200) && (update_object_num == 1)) 
-    {
-      // Won't update again until object passes
-      update_object_num = 0;
+      // Brightness is maximum
+      TA0CCR1 = 32;
     }
-    sprintf(str, "%d", Object_Counter); // Convert number to string
-    Graphics_drawStringCentered(&g_sContext,
-                                str, 
-                                AUTO_STRING_LENGTH, 
-                                64, 
-                                60,
-                                OPAQUE_TEXT); // Display number
-    // Convert number to string
-    sprintf(str, "%4d", LUX_Val);
-    Graphics_drawStringCentered(&g_sContext,
-                                str,
-                                AUTO_STRING_LENGTH,
-                                62, 
-                                80,
-                                OPAQUE_TEXT); // Display number
-    __delay_cycles(500000);                   // wait a second
-    // Make rectangular outline for showing optical sensor value
-    if (round(LUX_Val / 9.434) + 1 < 105) 
+    if (y < DOWN)
     {
-      Graphics_setForegroundColor(&g_sContext,
-                                  GRAPHICS_COLOR_BLACK);
-      const Graphics_Rectangle RectLoc = {
-        .xMin = 11 + round(LUX_Val / 9.434) + 1,
-        .yMin = 101,
-        .xMax = (128 - 11),
-        .yMax = (100 + 9)
-      };
-      Graphics_fillRectangle(&g_sContext, &RectLoc);
+      // Brightness is off
+      TA0CCR1 = 0;
     }
-    // Make rectangular outline for showing optical sensor value
-    Graphics_setForegroundColor(&g_sContext,
-                                GRAPHICS_COLOR_GOLDENROD);
-    const Graphics_Rectangle RectLoc1 = {
-      .xMin = 11,
-      .yMin = 101,
-      .xMax = 11 + round(LUX_Val / 9.434),
-      .yMax = (100 + 9)
-    };
-    Graphics_fillRectangle(&g_sContext, &RectLoc1);
+
+    if (x > UP)
+    {
+      if (TA0CCR1 > 0)
+      {
+        TA0CCR1 -= 1;
+      }
+    }
+
+    if (x < DOWN)
+    {
+      if (TA0CCR1 < 32)
+      {
+        TA0CCR1 += 1;
+      }
+    }
+
+    __delay_cycles(16000); // 1ms delay
   }
+  return 0;
 }

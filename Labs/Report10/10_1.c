@@ -1,61 +1,80 @@
-void HAL_LCD_PortInit(void)
+#include "msp430fr6989.h"
+
+#define redLED BIT0
+#define greenLED BIT7
+#define S1 BIT1
+#define S2 BIT2
+
+// Configures ACLK to 32 KHz crystal
+void config_ACLK_to_32KHz_crystal()
 {
-  // Configuring the SPI pins
-  // Configure UCB0CLK/P1.4 pin to serial clock
-  P1SEL0 |= BIT4;  // on according to data sheet for UCB0CLK
-  P1SEL1 &= ~BIT4; // off according to data sheet for UCB0CLK
-  // Configure UCB0SIMO/P1.6 pin to SIMO
-  P1SEL0 |= BIT6;
-  P1SEL1 &= ~BIT6;
-  // OK to ignore UCB0STE/P1.5 since we are connecting the display's enable bit
-  // to low (enabled all the time).
-  // OK to ignore UCB0SOMI/P1.7 since the display doesn't give back any data
+  // By default, ACLK runs on LFMODCLK at 5MHz/128 = 39 KHz
 
-  // Configuring the display's other pins
-  // Set reset pin as output
-  P9DIR |= BIT4;
-  // Set the data/command pin as output (P2.3)
-  P2DIR |= BIT3;
-  // Set the chip select pin as output (P2.5)
-  P2DIR |= BIT5;
+  // Reroute pins to LFXIN/LFXOUT functionality
+  PJSEL1 &= ~BIT4;
+  PJSEL0 |= BIT4;
 
+  // Wait until the oscillator fault flags remain cleared
+  CSCTL0 = CSKEY; // Unlock CS registers
+  do
+  {
+    CSCTL5 &= ~LFXTOFFG; // Local fault flag
+    SFRIFG1 &= ~OFIFG; // Global fault flag
+  }
+  while((CSCTL5 & LFXTOFFG) != 0);
+
+  CSCTL0_H = 0; // Lock CS registers
   return;
 }
-void HAL_LCD_SpiInit(void)
+
+int main(void)
 {
-  // SPI configuration
+  // Configure WDT & GPIO
+  WDTCTL = WDTPW | WDTHOLD;
+  PM5CTL0 &= ~LOCKLPM5;
 
-  // Put eUSCI in reset state and set all fields in the register to 0
-  UCB0CTLW0 = UCSWRST;
+  // Configure LEDs
+  P1DIR |= redLED;
+  P9DIR |= greenLED;
+  P1OUT &= ~redLED;
+  P9OUT &= ~greenLED;
 
-  // Fields that need to be nonzero are changed below
-  // Set clock phase to "capture on 1st edge, change on following edge"
-  // 1 = latched on the first edge and shifted on the following edge
-  UCB0CTLW0 |= UCCKPH; 
-  // Set clock polarity to "inactive low" (0)
-  UCB0CTLW0 &= ~UCCKPL; 
-  // Set data order to "transmit MSB first" (1)
-  UCB0CTLW0 |= UCMSB; 
-  // Set data size to 8-bit (0)
-  UCB0CTLW0 &= ~UC7BIT; 
-  // Set MCU to "SPI master" (1)
-  UCB0CTLW0 |= UCMST; 
-  // Set SPI to "3-pin SPI" (0) (we won't use eUSCI's chip select)
-  UCB0CTLW0 |= UCMODE0; 
-  // Set module to synchronous mode (1)
-  UCB0CTLW0 |= UCSYNC; 
-  // Set clock to SMCLK which is 2, in master mode
-  UCB0CTLW0 |= UCSSEL_2;
-  // Configure the clock divider (SMCLK is set to 16 MHz; run SPI at 8 MHz using
-  // SMCLK)
-  // Maximum SPI supported frequency on the display is 10 MHz
-  UCB0BRW |= 2; // Divider = 2 in order to get 8 Mhz from 16 Mhz clock
-  // Exit the reset state (1) at the end of the configuration
-  UCB0CTLW0 &= ~UCSWRST; 
-  // Set CS' (chip select) bit to 0 (display always enabled)
-  P2OUT &= ~BIT5;
-  // Set DC' bit to 0 (assume data)
-  P2OUT &= ~BIT3;
+  // Configure buttons
+  P1DIR &= ~(S1 | S2);
+  P1REN |= (S1 | S2);
+  P1OUT |= (S1 | S2);
+  P1IFG &= ~(S1 | S2); // Flags are used for latched polling
 
-  return;
+  config_ACLK_to_32KHz_crystal();
+
+  TA0CCR0 = 819; // 0.1s for red
+  TA0CCTL0 |= CCIE; // Enabling channel 1 interrupt
+
+  //       ACLK       /4     Continuous  Clear TAR
+  TA0CTL = TASSEL_1 | ID_2 | MC_2      | TACLR;
+
+  _low_power_mode_3(); // We only need ACLK
+
+  return 0;
+}
+
+#pragma vector = TIMER0_A0_VECTOR
+__interrupt void T0A0_ISR()
+{
+  P1OUT ^= redLED;
+  TA0CCR0 += 819;
+  // clearing the flag
+  TA0CCTL0 &= ~CCIFG;
+}
+
+#pragma vector = TIMER0_A1_VECTOR
+__interrupt void T0A1_ISR()
+{
+  if (TA0CCTL1 & CCIFG)
+  {
+    P9OUT ^= greenLED;
+    TA0CCR1 += 4096; // 1/2 a second
+    // clearing the flag
+    TA0CCTL1 &= ~CCIFG;
+  }
 }

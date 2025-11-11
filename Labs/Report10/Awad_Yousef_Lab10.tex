@@ -46,13 +46,14 @@ This experiment investigates the advanced capabilities of the MSP430FR6989 Timer
 
 \section{10.1 Timer's Multiple Channels}
 The visual comparison appears to be the same/similar to what I set the values to be at. Alongside this here is the following derivation for the number of cycles for each channel:
+$$ \frac{f_{clk}}{input\ divider}*desired\ delay\ in\ seconds $$
+$$ \frac{32768}{4}*0.1 \approx 819 \rightarrow TA0CCR0 = 819 $$
+$$ \frac{32768}{4}*0.5 \approx 4096 \rightarrow TA0CCR1 = 4096 $$
 \lstinputlisting{10_1.c}
 \pagebreak
 
 \section{10.2 Using Three Channels}
 The durations, at least when tested by my stopwatch on my phone and on my watch, are close to the time's that I set (though, there was a slight error most likely due to human error).
-\newline
-\includegraphics[width=1\textwidth]{pictures/demo_showing_2_pictures.png}
 \lstinputlisting{10_2.c}
 \pagebreak
 
@@ -68,28 +69,27 @@ The button push lasts \textbf{[answer here]}
 
 \section{Student Q\&A}
 \subsection{1}
-\textbf{Given:} \textit{Is SPI implemented as simplex or full-duplex in this experiment?}
-SPI is only implmented as simplex as the Serial Data Out Pin does not transmit data back to the MCU. This means that there is only one lane of communication, thereby not being duplexed.
+\textbf{Given:} \textit{Copy the description of P9.7 from the pinout diagram and determine whether this pin supports timer-based output.}
+\newline
+From the description of P9.7 is has the following functionality ESICI3/A15/C15. In that, none of these support CCR, therefore the pin does not support timer-based output.
 
 \subsection{2}
-\textbf{Given:} \textit{What SPI clock frequency did we set up in this lab?}
-The SPI Clock Frequency was set to 8MHz as instructed in the lab manual...
+\textbf{Given:} \textit{In the code with three channels, why was it necessary to divide ACLK?}
+\newline
+It is necessary to divide ACLK due to the fact that we want a delay of 4 seconds. ACLK specifically has a frequency of 65535, of which in up mode (and/or continuous mode) will have a maximum period of two seconds between each interrupt. Therefore, if we divide it, we can extend the interrupts to be at most every four seconds.
 
 \subsection{3}
-\textbf{Given:} \textit{What I2C clock frequency did we set up in this lab?}
-The I2C Clock Frequency was set to 320KHz as was instructed by the lab manual....
+\textbf{Given:} \textit{In the first part, we configured two periodic interrupts using two channels of the timer. Is this
+approach scalable? For example, using a Timer A module with five channels, can we configure five periodic interrupts? Explain and mention in what mode the timer would run.}
+\newline
+This approach is scalable up to five channels, since Timer\_A has support up to five channels. The other three modules of Timer only support two, three, and three channels respectively. If you wanted to have these five channels, the timer would then have to be configured with a mode that allows for the capture and compare registers to be utilized (eg: up mode). Continuous mode would, specifically, not allow for the unique interrupts to be raised.
 
 \subsection{4}
-\textbf{Given:} \textit{What is the maximum SPI clock frequency that is supported by the eUSCI module? Look in the microcontroller’s data sheet in Table 5-18.}
-The Maximum SPI Clock Frequency supported by the eUSCI Module for the MSP430 is 16MHz, according to the data sheet (Table 5-18, shown below).
+\textbf{Given:} \textit{As an example, Channel 1’s interrupt occurs every 40K cycles. The first interrupt is scheduled for when TAR=40K cycles. Explain how the next interrupt is scheduled? Explain the overflow mechanism and show why it results in a correct value.}
 \newline
-\includegraphics[width=1\textwidth]{pictures/image.png}
-
-\subsection{5}
-\textbf{Given:} \textit{Show how you computed the I2C clock divider in the 3rd part.}
-To calculate the I2C Clock Divider for Part 3, I simply did teh following:
-$$ Clock = \frac{16MHz_{master\ clock}}{320KHz_{desired\ clock}} = \frac{16*10^6}{320*10^3} = 50 $$
+With interrupts occuring every 40 thousand cycles, future interrupts are scheduled by adding the interrupt period to the TA0R value of the previous interrupt. In this case, it would be 40 thousand + 40 thousand, resulting in 80 thousand. This 80 thousand is greater than the maximum therefore making so that, when it overflows, you get 0x3380 in hex or 14464 in decimal, of which is now the new expected TA0R value for the next interrupt raise.
 
 \section{Conclusion}
+This laboratory successfully demonstrated the advanced, hardware-centric features of the Timer\_A module, moving beyond simple software delays. We proved that multiple capture/compare channels can operate concurrently in continuous mode to manage independent, asynchronous timing intervals. Furthermore, this lab highlighted the efficiency of hardware offloading by successfully generating a stable, CPU-independent 1000Hz PWM signal to control LED brightness and by utilizing Input Capture mode to timestamp external button events with high precision. These exercises confirm that leveraging the timer's dedicated hardware for output modulation and input timing is essential for building efficient, responsive, and low-power embedded systems.
 
 \end{document}
