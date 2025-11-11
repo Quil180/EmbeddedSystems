@@ -42,8 +42,19 @@
 \newpage
 
 \section{Introduction}
+This experiment introduces the functionality of the Analog-to-Digital Converter (ADC). The primary objective is to learn how to configure and use the ADC module to interface with an analog peripheral, specifically the 2D joystick on the Educational BoosterPack. The lab begins with an overview of the Successive Approximation Register (SAR) ADC's operation, including the importance of the sample-and-hold time (SHT). This theory is applied by calculating the minimum SHT required for the joystick and configuring the ADC12\_B module's registers accordingly. Practical work involves programming the MCU to read the joystick's horizontal (X-axis) coordinate , and then expanding the configuration to read both the X- and Y-coordinates using a "sequence-of-channels". Finally, this knowledge is applied to develop a "Platform Balancing Control" application, which uses the joystick to adjust the height of four platform corners while monitoring for unsafe height differences.
 
 \section{8.1 Using the ADC SAR-Type}
+So, first we must calculate the SHT (Sample-and-Hold Time) with a 12-bit resolution ADC in the msp430fr6989. Now to do that, I had to look into the datasheet and found the following:
+\begin{itemize}
+  \item $C_{internal} = 15pF$
+  \item $R_{internal} = 10K\Omega$
+\end{itemize}
+And then with the given external resistance and capacitance of $10k\Omega$ and $1pF$, respectively, all plugged into the following function
+$$ t \ge (R_I + R_E)*(C_I + C_E)*ln(2^{n + 1}) $$
+$$ t \ge (10*10^{3} + 10*10^{3})*(15*10^{-12} + 1*10^{-12})*ln(2^{12 + 1}) $$
+$$ t \ge 2.8883*10^{-6} $$
+Therefore, we get, when rounded up, $3\mu s$ to be the minimum Sample-and-Hold Time. Now, to find the SHT duration we simply take the highest value of the frequency, 5.4MHz and find the time per cycle, or $\frac{1}{5.4MHz}$ and use it as the divisor to the previous $3\mu s$ from before. With that, I got, $\approx 11$ SHT Cycles, which would round up to 16 due to it needing to be a power of 2. As well... Thankfully, the returned values are valid looking and make sense!
 \lstinputlisting{8_1.c}
 \pagebreak
 
@@ -51,15 +62,25 @@
 \lstinputlisting{8_2.c}
 \pagebreak
 
-\section{8.3 Application: Platform Balancing Control}
-\lstinputlisting{8_3.c}
-\pagebreak
+% \section{8.3 Application: Platform Balancing Control}
+% \lstinputlisting{8_3.c}
+% \pagebreak
 
 \section{Student Q\&A}
 \subsection{1}
 \textbf{Given:} \textit{How many cycles does it take the ADC to convert a 12-bit result? (look in the configuration register that contains ADC12RES).}
-
+\begin{itemize}
+  \item It would take 14 clock cycles.
+\end{itemize}
 \subsection{2}
 \textbf{Given:} \textit{In this experiment, we set our reference voltages $VR+ = AV CC$ (Analog Vcc) and $VR- = AV SS$ (Analog Vss). What voltage values do these signals have? Look in the MCU data sheet (slas789c) in Table 5.3. Assume that Vcc=3.3V and Vss=0.}
+It is the following:
+\begin{itemize}
+  \item $AVCC = V_{cc} = 3.3V$
+  \item $AVSS = V_{ss} = 0.0V$
+\end{itemize}
+
+\section{Conclusion}
+This lab successfully demonstrated the configuration and application of the ADC12\_B module for interfacing with the analog joystick. A foundational part of the lab involved calculating the minimum sample-and-hold time (SHT) based on SAR ADC theory and configuring the necessary control registers, such as `ADC12CTL0` and `ADC12CTL1`, for the correct clock, resolution, and SHT cycles. The experiment progressed from reading a single analog channel for the X-axis to implementing the ADC's "sequence-of-channels" mode to capture both X and Y coordinates from one trigger. This cumulative knowledge was then applied to build a "Platform Balancing Control" application, which used the joystick input to manage a system and enforce safety constraints, providing comprehensive practical experience in managing and utilizing analog-to-digital conversions.
 
 \end{document}

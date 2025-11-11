@@ -1,537 +1,143 @@
-#include <msp430.h>
 #include <msp430fr6989.h>
-#include <string.h>
 #include <stdint.h>
 
+#define redLED BIT0
+#define FLAGS UCA1IFG
+#define RXFLAG UCRXIFG
+#define TXFLAG UCTXIFG
+#define TXBUFFER UCA1TXBUF
+#define RXBUFFER UCA1RXBUF
 
-#define FLAGS UCA1IFG // Contains the transmit & receive flags
-#define RXFLAG UCRXIFG // Receive flag
-#define TXFLAG UCTXIFG // Transmit flag
-#define TXBUFFER UCA1TXBUF // Transmit buffer
-#define RXBUFFER UCA1RXBUF // Receive buffer
-
-#define redLED BIT0 // Red LED at P1.0
-#define greenLED BIT7 // Green LED at P9.7
-
-#define BUT1 BIT1
-#define BUT2 BIT2
-
-// The array has the shapes of the digits (0 to 9)
-// Complete this array...
-const unsigned char LCD_Shapes[10] = {0xFC,0x60,0xDB,0xF3,0x67,0xB7,0xBF,0xE0, 0xFF, 0xF7} ;
-
-volatile int number = 0;
-
-volatile unsigned int LuxValue = 0;
-
-volatile int time = 0;
-volatile int current_time = 50000;
-
-
-char HH_c[] = "00";
-char MM_c[] = "00";
-char SS_c[] = "00";
-
-volatile int prevBase;
-
-void uart_write_char(volatile unsigned char ch)
+// 9600 baud based on 1 MHz SMCLK w/16x oversampling.
+// 8 bits, no parity, LSB first, 1 stop bit UART communication
+void Initialize_UART(void)
 {
-  while (!(FLAGS & TXFLAG))
-  {
-    // Wait for transmission that is ongoing to complete
-  }
-
-  TXBUFFER = ch;
-  return;
-}
-
-void uart_write_string(char *string)
-{
-  unsigned int i; // counter
-  for (i = 0; i < strlen(string); i++)
-  {
-    uart_write_char(string[i]);
-  }
-  return;
-}
-
-// Reverses a given string
-void strrev(char *str)
-{
-  unsigned int i = 0;
-  unsigned int j = strlen(str) - 1;
-  char temp;
-  while (i < j)
-  {
-    temp = str[i];
-    str[i] = str[j];
-    str[j] = temp;
-    i++;
-    j--;
-  }
-}
-
-// Converts an unsigned 16-bit integer to a null-terminated string (base 10).
-void custom_itoa(uint16_t number, char *buffer)
-{
-  unsigned int i = 0;
-
-  // Handle the special case of 0
-  if (number == 0)
-  {
-    buffer[i++] = '0';
-    buffer[i] = '\0';
-    return;
-  }
-
-  // Process individual digits
-  while (number > 0)
-  {
-    int remainder = number % 10;
-    buffer[i++] = remainder + '0'; // Convert digit to its ASCII character
-    number = number / 10;
-  }
-
-  buffer[i] = '\0'; // Null-terminate the string
-
-  // The digits are in reverse order, so we need to reverse the string
-  strrev(buffer);
-}
-
-void uart_write_uint16 (uint16_t number)
-{
-  // Converting the number via snprintf
-  char buffer[6]; // 5 characters is the max amount of characters for 65,536
-  custom_itoa(number, buffer);
-  uart_write_string(buffer);
-  return;
-}
-
-unsigned char uart_read_char(void)
-{
-  if (!(FLAGS & RXFLAG))
-  {
-    return 0; // no byte was recieved
-  }
-
-  // Return the buffer
-  volatile unsigned char return_char = RXBUFFER;
-  return return_char;
-}
-
-void initialize_uart(void)
-{
-  // Configuring the pins to use backchannel uart
-  P3SEL1 &= ~(transmit | recieve);
-  P3SEL0 |= (transmit | recieve);
-
-  // Setting the clock to SMCLK
-  UCA1CTLW0 |= UCSSEL_2;
-
-  // Setting the dividers and enabling oversampling
+  // Configure pins to UART functionality
+  P3SEL1 &= ~(BIT4 | BIT5);
+  P3SEL0 |= (BIT4 | BIT5);
+  // Main configuration register
+  UCA1CTLW0 = UCSWRST;
+  // Engage reset; change all the fields to zero
+  // Most fields in this register, when set to zero, correspond to the
+  // popular configuration
+  UCA1CTLW0 |= UCSSEL_2; // Set clock to SMCLK
+  // Configure the clock dividers and modulators (and enable oversampling)
   UCA1BRW = 6;
-  // setting the modulators and such
+  // divider
+  // Modulators: UCBRF = 8 = 1000--> UCBRF3 (bit #3)
+  // UCBRS = 0x20 = 0010 0000 = UCBRS5 (bit #5)
   UCA1MCTLW = UCBRF3 | UCBRS5 | UCOS16;
-
-  // Exiting the reset state
+  // Exit the reset state
   UCA1CTLW0 &= ~UCSWRST;
 }
 
-// Configures ACLK to 32 KHz crystal
-void config_ACLK_to_32KHz_crystal(void)
+void Initialize_ADC(void)
 {
-  // By default, ACLK runs on LFMODCLK at 5MHz/128 = 39 KHz
+  // Configure the pins to analog functionality
+  // X-axis: A10/P9.2, for A10 (P9DIR=x, P9SEL1=1, P9SEL0=1)
+  P9SEL1 |= BIT2;
+  P9SEL0 |= BIT2;
+  // Y-axis: A4/P8.7 (P8DIR=x, P8SEL1=1,P8SEL0=)
+  P8SEL1 |= BIT7;
+  P8SEL0 |= BIT7;
+  // Turn on the ADC module
+  ADC12CTL0 |= ADC12ON;
+  // Turn off ENC (Enable Conversion) bit while modifying the configuration
+  ADC12CTL0 &= ~ADC12ENC;
+  //*************** ADC12CTL0 ***************
+  // ADC12SHT0x sets SHT cycles for results 0-7, 24-31
+  // ADC12MSC sets multiple analog inputs
+  ADC12CTL0 |= ADC12SHT0_2; // Sets SHT of 16 cycles (found in doc. slau367o table 34.4)
+  ADC12CTL0 |= ADC12MSC; // 1= multiple inputs
+  //*************** ADC12CTL1 ***************
+  // ADC12SHS sets read trigger
+  // ADC12SHP sets SAMPCON use
+  /// ADC12DIV sets clock divider
+  // ADC12SSEL sets clock base
+  // ADC12CONSEQx sets conversion sequence mode
+  ADC12CTL1 |= ADC12SHS_0;  // 0 = ADC12SC bit
+  ADC12CTL1 |= ADC12SHP;    // 1 = SAMPCON sourced from clock
+  ADC12CTL1 |= ADC12DIV_0;  // 0 = /1
+  ADC12CTL1 |= ADC12SSEL_0; // 0 = MODOSC
+  ADC12CTL1 |= ADC12CONSEQ_1;
+  // values in doc. slau367o table 34.5
+  //*************** ADC12CTL2 ***************
+  // ADC12RES sets bit resolution
+  // ADC12DF sets data format
+  ADC12CTL2 |= ADC12RES_2; // 2 = 12-bit
+  ADC12CTL2 &= ~ADC12DF;   // 0 = unsigned binary
+  //*************** ADC12CTL3 ***************
+  // ADC12CSTARTADDx sets first ADC12MEM register in conversion sequence
+  ADC12CTL3 |= ADC12CSTARTADD_0;
+  //*************** ADC12MCTL0 ***************
+  // ADC12VRSELx sets VR+ and VR- sources as well as buffering
+  // ADC12INCHx sets analog input
+  ADC12MCTL0 |= ADC12VRSEL_0; // 0 -> VR+ = AVCC and VR- = AVSS
+  ADC12MCTL0 |= ADC12INCH_10; // 10 = A10 input
+  //*************** ADC12MCTL1 ***************
+  // ADC12ENC sets final conversion channel
+  ADC12MCTL1 |= ADC12VRSEL_0;
+  ADC12MCTL1 |= ADC12INCH_4;
+  ADC12MCTL1 |= ADC12EOS; // 1 = last converted input
+  // set ENC bit at end of config
+  ADC12CTL0 |= ADC12ENC;
+}
 
-  // Reroute pins to LFXIN/LFXOUT functionality
-  PJSEL1 &= ~BIT4;
-  PJSEL0 |= BIT4;
-
-  // Wait until the oscillator fault flags remain cleared
-  CSCTL0 = CSKEY; // Unlock CS registers
-  do
+void uart_write_char(unsigned char ch)
+{
+  while ((FLAGS & TXFLAG) == 0)
   {
-    CSCTL5 &= ~LFXTOFFG; // Local fault flag
-    SFRIFG1 &= ~OFIFG; // Global fault flag
+    // Wait for any ongoing transmission to complete
   }
-  while((CSCTL5 & LFXTOFFG) != 0);
-
-  CSCTL0_H = 0; // Lock CS registers
+  // Copy the byte to the transmit buffer
+  TXBUFFER = ch; // Tx flag goes to 0 and Tx begins!
   return;
 }
 
-// Functions provided by the lab
-void initialize_i2c(void)
+void uart_write_12bit(uint16_t n)
 {
-  // Configure the MCU in Master mode
-  // Configure pins to I2C functionality
-  // (UCB1SDA same as P4.0) (UCB1SCL same as P4.1)
-  // (P4SEL1=11, P4SEL0=00) (P4DIR=xx)
-  P4SEL1 |= (BIT1|BIT0);
-  P4SEL0 &= ~(BIT1|BIT0);
-  // Enter reset state and set all fields in this register to zero
-  UCB1CTLW0 = UCSWRST;
-  // Fields that should be nonzero are changed below
-  // (Master Mode: UCMST) (I2C mode: UCMODE_3) (Synchronous mode: UCSYNC)
-  // (UCSSEL 1:ACLK, 2,3:SMCLK)
-  UCB1CTLW0 |= UCMST | UCMODE_3 | UCSYNC | UCSSEL_3;
-  // Clock frequency: SMCLK/8 = 1 MHz/8 = 125 KHz
-  UCB1BRW = 8;
-  // Chip Data Sheet p. 53 (Should be 400 KHz max)
-  // Exit the reset mode at the end of the configuration
-  UCB1CTLW0 &= ~UCSWRST;
-}
-
-int i2c_read_word(unsigned char i2c_address, unsigned char i2c_reg, unsigned int *data)
-{
-  unsigned char byte1=0, byte2=0; // Intialize to ensure successful reading
-  UCB1I2CSA = i2c_address; // Set address
-  UCB1IFG &= ~UCTXIFG0;
-  // Transmit a byte (the internal register address)
-  UCB1CTLW0 |= UCTR;
-  UCB1CTLW0 |= UCTXSTT;
-  while(!(UCB1IFG & UCTXIFG0))
-  {
-    // Wait for flag to raise
-  } 
-  UCB1TXBUF = i2c_reg; // Write in the TX buffer
-  while(!(UCB1IFG & UCTXIFG0))
-  {
-    // Buffer copied to shift register; Tx in progress; set Stop bit
+  const char hex_digits[] = "0123456789ABCDEF"; // Digits used in hexadecimal
+  uint8_t digit;                                // one hex digit = 4 bits
+  int i;
+  // print the 0x part of hex format
+  uart_write_char('0');
+  uart_write_char('x');
+  // Extract and print hex digits from input
+  // i = 8 because bits 12-15 will always be 0000
+  for (i = 8; i >= 0; i = i - 4)
+  { 
+    digit = (n >> i) & 0xF;
+    uart_write_char(hex_digits[digit]);
   }
-  // Repeated Start
-  UCB1CTLW0 &= ~UCTR;
-  UCB1CTLW0 |= UCTXSTT;
-  // Read the first byte
-  while(!(UCB1IFG & UCRXIFG0))
-  {
-    // Wait for flag to raise
-  } 
-  byte1 = UCB1RXBUF;
-  // Assert the Stop signal bit before receiving the last byte
-  UCB1CTLW0 |= UCTXSTP;
-  // Read the second byte
-  while(!(UCB1IFG & UCRXIFG0)) 
-  {
-    // Wait for flag to raise
-  } 
-  byte2 = UCB1RXBUF;
-  while(UCB1CTLW0 & UCTXSTP) 
-  {
-  }
-  while(UCB1STATW & UCBBUSY)
-  {
-  }
-  *data = (byte1 << 8) | (byte2 & (unsigned int)0x00FF);
-  return 0;
-}
-
-int i2c_write_word(unsigned char i2c_address, unsigned char i2c_reg, unsigned int data)
-{
-  unsigned char byte1, byte2;
-
-  UCB1I2CSA = i2c_address; // Set I2C address
-
-  byte1 = (data >> 8) & 0xFF; // MSByte
-  byte2 = data & 0xFF;        // LSByte
-
-  UCB1IFG &= ~UCTXIFG0;
-
-  // Write 3 bytes
-  UCB1CTLW0 |= (UCTR | UCTXSTT);
-
-  while(!(UCB1IFG & UCTXIFG0))
-  {
-    // Wait
-  }
-  UCB1TXBUF = i2c_reg;
-
-  while(!(UCB1IFG & UCTXIFG0))
-  {
-    // Wait
-  }
-  UCB1TXBUF = byte1;
-
-  while(!(UCB1IFG & UCTXIFG0))
-  {
-    // Wait
-  }
-  UCB1TXBUF = byte2;
-
-  while(!(UCB1IFG & UCTXIFG0))
-  {
-    // Wait
-  }
-
-  UCB1CTLW0 |= UCTXSTP;
-  while ( UCB1CTLW0 & UCTXSTP)
-  {
-    // Wait
-  }
-  while (UCB1STATW & UCBUSY)
-  {
-    // Wait
-  }
-
-  return 0;
-}
-
-void update_clock_numbers(unsigned int n)
-{
-  // A1 & A2 hours
-  // A3 & A4 Mins
-  // A5 & A6 seconds
-  // assume numbers
-  // divide by # secs in hours
-  // divide by # secs in hours
-  // divide by # 
-
-  unsigned int HH = 0;
-  unsigned int MM = 0;
-  unsigned int SS = 0;
-
-  unsigned int current_digit = 0;
-  current_digit = n % 3600;    // gets current # hours
-
-  // Seconds Logic 
-  unsigned int seconds = n % 60;
-  if (seconds > 0)
-  {
-    SS = seconds % 10;
-  }
-  if (seconds > 10)
-  {
-    SS += (seconds / 10) *10;
-  }
-
-  n /= 60;
-
-  // Minutes Logic 
-  unsigned int minutes = n % 60;
-  if (minutes > 0)
-  {
-    // add the one digits to the thing
-    MM += minutes % 10;
-  }
-  if (minutes > 10)
-  {
-    MM += (minutes / 10) * 10;
-  }
-
-  n = n/60;
-
-  // Hours Logic
-  unsigned int hours = n % (60);
-
-  if (hours > 0)
-  {
-    HH += hours % 10;
-  }
-  if (hours > 10)
-  {
-    HH += (hours / 10) * 10;
-  }
-
-  // Printing
-  uart_write_uint16(HH);
-  uart_write_char(':');
-  uart_write_uint16(MM);
-  uart_write_char(':');
-  uart_write_uint16(SS);
-  uart_write_char('\t');
 }
 
 void main(void) 
 {
-  volatile int n;
-  // Stop the Watchdog timer
   WDTCTL = WDTPW | WDTHOLD;
-
-  // Unlock the GPIO pins
   PM5CTL0 &= ~LOCKLPM5;
 
-  // Configure the LEDs as output
-  P1DIR |= redLED; // Direct pin as output
-  P1OUT &= ~redLED; // Turn LED Off
-
-  P9DIR |= greenLED; // Direct pin as output
-  P9OUT &= ~greenLED; // Turn LED Off
-
-  //buttons
-  P1DIR &= ~(BUT1 | BUT2);
-  P1REN |=  (BUT1 | BUT2);
-  P1OUT |=  (BUT1 | BUT2);
-
-  P1IES |=  (BUT1 | BUT2); //1: Interrupt on falling edge (0 for rising edge)
-  P1IFG &= ~(BUT1 | BUT2); //0: Clear the interrupt flags
-  P1IE  |=  (BUT1 | BUT2); //1: Enable the interrupts
-  
-  config_ACLK_to_32KHz_crystal();
-
-  // standard delay is 1 second with interrupts
-  // Configure channel 0 for up mode with interrupts
-  TA0CCR0 = 32768;    // 1 second @ 32kHz 
-  TA0CCTL0 |= CCIE;   // Enable channel 0 CCIE1
-  TA0CCTL0 &= ~CCIFG; // Clear Channel 0 CCIFG
-
-  // Use ACLK, divide by 1, up mode, clear TAR 
-  TA0CTL = TASSEL_1 | ID_0 | MC_1 | TACLR;
-
-  // Ensure flag is cleared at the start
-  TA0CTL &= ~TAIFG;
- 
- // Enable Global Interrupt bit ( call an intrinsic function)
- _enable_interrupt();
- initialize_i2c();
- initialize_uart();
-
-  i2c_write_word(0x44,0x01, 0x7604);
-  
+  P1DIR |= redLED;
   P1OUT |= redLED;
-  uart_write_string("done with init\n");
-  _delay_cycles(600000);
-  i2c_read_word(0x44, 0x00, &LuxValue);
-  prevBase = LuxValue;
+
+  Initialize_UART();
+  Initialize_ADC();
 
   for (;;)
-  {   
-    _delay_cycles(50000);
-    // confirm loop in action
-    P1OUT ^= redLED;
-  } 
-}
-
-// one second Timer system
-// interrupt for blinking
-#pragma vector = TIMER0_A0_VECTOR
-__interrupt void TA00_ISR()
-{
-  P9OUT ^= greenLED;
-
-  if (time == 1)
   {
-    i2c_read_word(0x44, 0x00, &LuxValue);
-    update_time();
-    uart_write_char('\t');
-    uart_write_uint16(LuxValue);
-    uart_write_string(" lux");
-
-    if (LuxValue > prevBase + 10)
+    ADC12CTL0 |= ADC12SC; // Triggers ADC12BUSY while reading input
+    while ((ADC12CTL1 & ADC12BUSY) != 0) 
     {
-      uart_write_string("\t<Up>\n");
-      prevBase = LuxValue;
-    }
-    else if (LuxValue < prevBase - 10)
-    {
-      uart_write_string("\t<Down>\n");
-      prevBase = LuxValue;
-    }
-    else
-    {
-      uart_write_char('\n');
-    }
-    time = 0;
-  }
-  time = time + 1;
-  current_time = current_time + 1;
-}
-
-void update_time()
-{
-  // if it is 9
-  if (MM_c[1] == '9')
-  {
-    if (MM_c[0] < '5')
-    {
-      MM_c[0]++;
-      MM_c[1] = '0';
-    }
-    else
-    {
-      //now increase hour by one
-      MM_c[0] = '0';
-      MM_c[1] = '0';
-      // check last possible time, else go up
-      if (HH_c[0] == '2' && HH_c[1] == '3')
-      {
-        HH_c[0] = '0';
-        HH_c[1] = '0';
-      }
-      else if (HH_c[1] == '0')
-      {
-        HH_c[0]++;
-        HH_c[1] = '0';
-      }
-      else
-      {
-        HH_c[1]++;
-      }
-    }
-  }
-  else
-  {
-    MM_c[1]++;
-  }
-  print_time();
-}
-
-void print_time()
-{
-  uart_write_string(HH_c);
-  uart_write_char(':');
-  uart_write_string(MM_c);
-}
-
-#pragma  vector = PORT1_VECTOR
-__interrupt  void set_time()
-{
-  __delay_cycles(50000);
-  if (P1IFG & BUT2) 
-  {
-    TA0CTL &= ~MC_3;
-    uart_write_string("Enter the time...(3 or 4 digits then hit Enter)\n");
-    char given_char;
-
-    char time[] = "____";
-    volatile int loc = 0;
-    while (loc < 4)
-    {
-      given_char = uart_read_char();
-      if (given_char ==0)
-      {
-        continue;
-      }
-      
-      if (given_char == 3 || given_char == 27 || given_char == 13)
-      {
-        break;
-      }
-      time[loc] = given_char;
-      loc++;
+      // Wait for flag to drop
     } 
-    uart_write_string("got out!\n");
-
-    if (time[3] == 95)
-    {
-      uart_write_string("entered 3");
-      HH_c[0] = 48;
-      HH_c[1] = time[0];
-      MM_c[0] = time[1];
-      MM_c[1] = time[2];
-    }
-    else
-    {
-      uart_write_string("entered 4");
-      HH_c[0] = time[0];
-      HH_c[1] = time[1];
-      MM_c[0] = time[2];
-      MM_c[1] = time[3];
-    }
-
-    uart_write_string("Time set to ");
-    print_time();
-    uart_write_char('\n');
-
-    P1IFG &= ~BUT2;
-    TA0CTL |= MC_1;
+    ADC12CTL0 &= ~ADC12SC;
+    uint16_t x_coord = ADC12MEM0; // ADC12MEM0 linked to A10, x-input
+    uint16_t y_coord = ADC12MEM1; // ADC12MEM1 linked to A4, y-input
+    uart_write_12bit(x_coord);    // Print x-coordinate to console
+    uart_write_char(' ');         // Readability space
+    uart_write_12bit(y_coord);    // Print y-coordinate to console
+    uart_write_char('\n');        // newline
+    P1OUT ^= redLED;              // toggle red LED
+    _delay_cycles(500000);        // 0.5 second delay
   }
 }
+

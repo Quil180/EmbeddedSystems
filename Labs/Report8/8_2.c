@@ -1,289 +1,142 @@
 #include <msp430fr6989.h>
 #include <stdint.h>
-#include <string.h>
 
-// UART Channels are P3.4 and P3.5 for transmit and recieve respectively
-#define transmit BIT4
-#define recieve BIT5
+#define redLED BIT0
+#define FLAGS UCA1IFG
+#define RXFLAG UCRXIFG
+#define TXFLAG UCTXIFG
+#define TXBUFFER UCA1TXBUF
+#define RXBUFFER UCA1RXBUF
 
-// WE LOVE DEFINES
-#define FLAGS UCA1IFG // Contains the transmit & receive flags
-#define RXFLAG UCRXIFG // Receive flag
-#define TXFLAG UCTXIFG // Transmit flag
-#define TXBUFFER UCA1TXBUF // Transmit buffer
-#define RXBUFFER UCA1RXBUF // Receive buffer
-
-// Global variables for states of runway1 and 2
-volatile int red_state = 0; // runway 1 state
-volatile int green_state = 0; // runway 2 state
-volatile int blink_state = 0;
-
-// Functions provided by the lab
-void initialize_i2c(void)
+// 9600 baud based on 1 MHz SMCLK w/16x oversampling.
+// 8 bits, no parity, LSB first, 1 stop bit UART communication
+void Initialize_UART(void)
 {
-  // Configure the MCU in Master mode
-  // Configure pins to I2C functionality
-  // (UCB1SDA same as P4.0) (UCB1SCL same as P4.1)
-  // (P4SEL1=11, P4SEL0=00) (P4DIR=xx)
-  P4SEL1 |= (BIT1|BIT0);
-  P4SEL0 &= ~(BIT1|BIT0);
-  // Enter reset state and set all fields in this register to zero
-  UCB1CTLW0 = UCSWRST;
-  // Fields that should be nonzero are changed below
-  // (Master Mode: UCMST) (I2C mode: UCMODE_3) (Synchronous mode: UCSYNC)
-  // (UCSSEL 1:ACLK, 2,3:SMCLK)
-  UCB1CTLW0 |= UCMST | UCMODE_3 | UCSYNC | UCSSEL_3;
-  // Clock frequency: SMCLK/8 = 1 MHz/8 = 125 KHz
-  UCB1BRW = 8;
-  // Chip Data Sheet p. 53 (Should be 400 KHz max)
-  // Exit the reset mode at the end of the configuration
-  UCB1CTLW0 &= ~UCSWRST;
-}
-
-int i2c_read_word(unsigned char i2c_address, unsigned char i2c_reg, unsigned int * data)
-{
-  unsigned char byte1=0, byte2=0; // Intialize to ensure successful reading
-  UCB1I2CSA = i2c_address; // Set address
-  UCB1IFG &= ~UCTXIFG0;
-  // Transmit a byte (the internal register address)
-  UCB1CTLW0 |= UCTR;
-  UCB1CTLW0 |= UCTXSTT;
-  while((UCB1IFG & UCTXIFG0)==0) {} // Wait for flag to raise
-  UCB1TXBUF = i2c_reg; // Write in the TX buffer
-  while((UCB1IFG & UCTXIFG0)==0) {} // Buffer copied to shift register; Tx in progress; set Stop bit
-  // Repeated Start
-  UCB1CTLW0 &= ~UCTR;
-  UCB1CTLW0 |= UCTXSTT;
-  // Read the first byte
-  while((UCB1IFG & UCRXIFG0)==0) {} // Wait for flag to raise
-  byte1 = UCB1RXBUF;
-  // Assert the Stop signal bit before receiving the last byte
-  UCB1CTLW0 |= UCTXSTP;
-  // Read the second byte
-  while((UCB1IFG & UCRXIFG0)==0) {} // Wait for flag to raise
-  byte2 = UCB1RXBUF;
-  while((UCB1CTLW0 & UCTXSTP)!=0) {}
-  while((UCB1STATW & UCBBUSY)!=0) {}
-  *data = (byte1 << 8) | (byte2 & (unsigned int)0x00FF);
-  return 0;
-}
-
-int i2c_write_word(unsigned char i2c_address, unsigned char i2c_reg, unsigned int data)
-{
-  unsigned char byte1, byte2;
-
-  UCB1I2CSA = i2c_address;             // Set I2C address
-
-  byte1 = (data >> 8) & 0xFF;          // MSByte
-  byte2 = data & 0xFF;                 // LSByte
-
-  UCB1IFG &= ~UCTXIFG0;
-
-  // Write 3 bytes
-  UCB1CTLW0 |= (UCTR | UCTXSTT);
-
-  while( (UCB1IFG & UCTXIFG0) == 0) {}
-  UCB1TXBUF = i2c_reg;
-
-  while( (UCB1IFG & UCTXIFG0) == 0) {}
-  UCB1TXBUF = byte1;
-
-  while( (UCB1IFG & UCTXIFG0) == 0) {}
-  UCB1TXBUF = byte2;
-
-  while( (UCB1IFG & UCTXIFG0) == 0) {}
-
-  UCB1CTLW0 |= UCTXSTP;
-  while( (UCB1CTLW0 & UCTXSTP) != 0 ) {}
-  while((UCB1STATW & UCBUSY)!=0) {}
-
-  return 0;
-}
-
-// Reverses a given string
-void strrev(char *str)
-{
-  unsigned int i = 0;
-  unsigned int j = strlen(str) - 1;
-  char temp;
-  while (i < j)
-  {
-    temp = str[i];
-    str[i] = str[j];
-    str[j] = temp;
-    i++;
-    j--;
-  }
-}
-
-// Converts an unsigned 16-bit integer to a null-terminated string (base 10).
-void custom_itoa(uint16_t number, char *buffer)
-{
-  unsigned int i = 0;
-
-  // Handle the special case of 0
-  if (number == 0)
-  {
-    buffer[i++] = '0';
-    buffer[i] = '\0';
-    return;
-  }
-
-  // Process individual digits
-  while (number > 0)
-  {
-    int remainder = number % 10;
-    buffer[i++] = remainder + '0'; // Convert digit to its ASCII character
-    number = number / 10;
-  }
-
-  buffer[i] = '\0'; // Null-terminate the string
-
-  // The digits are in reverse order, so we need to reverse the string
-  strrev(buffer);
-}
-
-// Configures ACLK to 32 KHz crystal
-void config_ACLK_to_32KHz_crystal()
-{
-  // By default, ACLK runs on LFMODCLK at 5MHz/128 = 39 KHz
-
-  // Reroute pins to LFXIN/LFXOUT functionality
-  PJSEL1 &= ~BIT4;
-  PJSEL0 |= BIT4;
-
-  // Wait until the oscillator fault flags remain cleared
-  CSCTL0 = CSKEY; // Unlock CS registers
-  do
-  {
-    CSCTL5 &= ~LFXTOFFG; // Local fault flag
-    SFRIFG1 &= ~OFIFG; // Global fault flag
-  }
-  while((CSCTL5 & LFXTOFFG) != 0);
-
-  CSCTL0_H = 0; // Lock CS registers
-  return;
-}
-
-void initialize_uart(void)
-{
-  // Configuring the pins to use backchannel uart
-  P3SEL1 &= ~(transmit | recieve);
-  P3SEL0 |= (transmit | recieve);
-
-  // Setting the clock to SMCLK
-  UCA1CTLW0 |= UCSSEL_2;
-
-  // Setting the dividers and enabling oversampling
+  // Configure pins to UART functionality
+  P3SEL1 &= ~(BIT4 | BIT5);
+  P3SEL0 |= (BIT4 | BIT5);
+  // Main configuration register
+  UCA1CTLW0 = UCSWRST;
+  // Engage reset; change all the fields to zero
+  // Most fields in this register, when set to zero, correspond to the
+  // popular configuration
+  UCA1CTLW0 |= UCSSEL_2; // Set clock to SMCLK
+  // Configure the clock dividers and modulators (and enable oversampling)
   UCA1BRW = 6;
-  // setting the modulators and such
+  // divider
+  // Modulators: UCBRF = 8 = 1000--> UCBRF3 (bit #3)
+  // UCBRS = 0x20 = 0010 0000 = UCBRS5 (bit #5)
   UCA1MCTLW = UCBRF3 | UCBRS5 | UCOS16;
-
-  // Exiting the reset state
+  // Exit the reset state
   UCA1CTLW0 &= ~UCSWRST;
 }
 
-void uart_write_char(volatile unsigned char ch)
+void Initialize_ADC(void)
 {
-  while (!(FLAGS & TXFLAG))
+  // Configure the pins to analog functionality
+  // X-axis: A10/P9.2, for A10 (P9DIR=x, P9SEL1=1, P9SEL0=1)
+  P9SEL1 |= BIT2;
+  P9SEL0 |= BIT2;
+  // Y-axis: A4/P8.7 (P8DIR=x, P8SEL1=1,P8SEL0=)
+  P8SEL1 |= BIT7;
+  P8SEL0 |= BIT7;
+  // Turn on the ADC module
+  ADC12CTL0 |= ADC12ON;
+  // Turn off ENC (Enable Conversion) bit while modifying the configuration
+  ADC12CTL0 &= ~ADC12ENC;
+  //*************** ADC12CTL0 ***************
+  // ADC12SHT0x sets SHT cycles for results 0-7, 24-31
+  // ADC12MSC sets multiple analog inputs
+  ADC12CTL0 |= ADC12SHT0_2; // Sets SHT of 16 cycles (found in doc. slau367o table 34.4)
+  ADC12CTL0 |= ADC12MSC; // 1= multiple inputs
+  //*************** ADC12CTL1 ***************
+  // ADC12SHS sets read trigger
+  // ADC12SHP sets SAMPCON use
+  /// ADC12DIV sets clock divider
+  // ADC12SSEL sets clock base
+  // ADC12CONSEQx sets conversion sequence mode
+  ADC12CTL1 |= ADC12SHS_0;  // 0 = ADC12SC bit
+  ADC12CTL1 |= ADC12SHP;    // 1 = SAMPCON sourced from clock
+  ADC12CTL1 |= ADC12DIV_0;  // 0 = /1
+  ADC12CTL1 |= ADC12SSEL_0; // 0 = MODOSC
+  ADC12CTL1 |= ADC12CONSEQ_1;
+  // values in doc. slau367o table 34.5
+  //*************** ADC12CTL2 ***************
+  // ADC12RES sets bit resolution
+  // ADC12DF sets data format
+  ADC12CTL2 |= ADC12RES_2; // 2 = 12-bit
+  ADC12CTL2 &= ~ADC12DF;   // 0 = unsigned binary
+  //*************** ADC12CTL3 ***************
+  // ADC12CSTARTADDx sets first ADC12MEM register in conversion sequence
+  ADC12CTL3 |= ADC12CSTARTADD_0;
+  //*************** ADC12MCTL0 ***************
+  // ADC12VRSELx sets VR+ and VR- sources as well as buffering
+  // ADC12INCHx sets analog input
+  ADC12MCTL0 |= ADC12VRSEL_0; // 0 -> VR+ = AVCC and VR- = AVSS
+  ADC12MCTL0 |= ADC12INCH_10; // 10 = A10 input
+  //*************** ADC12MCTL1 ***************
+  // ADC12ENC sets final conversion channel
+  ADC12MCTL1 |= ADC12VRSEL_0;
+  ADC12MCTL1 |= ADC12INCH_4;
+  ADC12MCTL1 |= ADC12EOS; // 1 = last converted input
+  // set ENC bit at end of config
+  ADC12CTL0 |= ADC12ENC;
+}
+
+void uart_write_char(unsigned char ch)
+{
+  while ((FLAGS & TXFLAG) == 0)
   {
-    // Wait for transmission that is ongoing to complete
+    // Wait for any ongoing transmission to complete
   }
-
-  TXBUFFER = ch;
+  // Copy the byte to the transmit buffer
+  TXBUFFER = ch; // Tx flag goes to 0 and Tx begins!
   return;
 }
 
-unsigned char uart_read_char(void)
+void uart_write_12bit(uint16_t n)
 {
-  if (!(FLAGS & RXFLAG))
-  {
-    return 0; // no byte was recieved
+  const char hex_digits[] = "0123456789ABCDEF"; // Digits used in hexadecimal
+  uint8_t digit;                                // one hex digit = 4 bits
+  int i;
+  // print the 0x part of hex format
+  uart_write_char('0');
+  uart_write_char('x');
+  // Extract and print hex digits from input
+  // i = 8 because bits 12-15 will always be 0000
+  for (i = 8; i >= 0; i = i - 4)
+  { 
+    digit = (n >> i) & 0xF;
+    uart_write_char(hex_digits[digit]);
   }
-
-  // Return the buffer
-  volatile unsigned char return_char = RXBUFFER;
-  return return_char;
 }
 
-void uart_write_string(char *string)
+void main(void) 
 {
-  unsigned int i; // counter
-  for (i = 0; i < strlen(string); i++)
-  {
-    uart_write_char(string[i]);
-  }
-  return;
-}
+  WDTCTL = WDTPW | WDTHOLD;
+  PM5CTL0 &= ~LOCKLPM5;
 
-void uart_write_uint16 (uint16_t number)
-{
-  // Converting the number via snprintf
-  char buffer[6]; // 5 characters is the max amount of characters for 65,536
-  custom_itoa(number, buffer);
-  uart_write_string(buffer);
-  return;
-}
+  P1DIR |= redLED;
+  P1OUT |= redLED;
 
-void uint16_to_4hex(unsigned int given_uint, char output[5])
-{
-  static const char hex[] = "0123456789ABCDEF"; // All possible hexes
-  output[0] = hex[(given_uint >> 12) & 0xF];
-  output[1] = hex[(given_uint >> 8) & 0xF];
-  output[2] = hex[(given_uint >> 4) & 0xF];
-  output[3] = hex[(given_uint >> 12) & 0xF];
-  output[4] = hex[(given_uint) & 0xF];
-  return;
-}
+  Initialize_UART();
+  Initialize_ADC();
 
-int main(void)
-{
-  // Enabling the leds and other stuff
-  WDTCTL   = WDTPW | WDTHOLD; // Stop WDT
-  PM5CTL0 &= ~LOCKLPM5;       // Enable GPIO pins
-
-  // doing what the function says
-  initialize_uart();
-
-  // yup, whatever it says
-  initialize_i2c();
-
-  // Actual logic for selection
   for (;;)
   {
-    unsigned int light = 0;
-
-    // Writing the configuration to the light sensor
-    /*
-    *  The configuration register is:
-    *  RN [15:12] (R/W)- b1100 is reset
-    *  CT [11] (R/W)- b1 is reset
-    *  M[ 10:9] (R/W) - b00 is reset
-    *  OVF [8] (R) - b0 is reset
-    *  CRF [7] (R) - b0 is reset
-    *  FH [6] (R) - b0 is reset
-    *  FL [5] (R) - b0 is reset
-    *  L [4] (R/W) - b1 is reset
-    *  POL [3] (R/W) - b0 is reset
-    *  ME [2] (R/W) - b0 is reset
-    *  FC [1:0] (R/W) - b00 is reset
-    *
-    *  R/W is Read/Write
-    *  R is Read
-    */
-    i2c_write_word(0x44, 0x01, 0x7614);
-    // Reading the value of the light sensor
-    i2c_read_word(0x44, 0x00, &light);
-
-    // Converting the gathered reading to the proper value
-    int correctedLight = light * 1.28;
-
-    // writing to the serial console what the light sensor found
-    uart_write_string("Lux: ");
-    uart_write_uint16(correctedLight);
-    uart_write_char('\n');
-
-    __delay_cycles(1000000); // delay of 1 million cycles
+    ADC12CTL0 |= ADC12SC; // Triggers ADC12BUSY while reading input
+    while ((ADC12CTL1 & ADC12BUSY) != 0) 
+    {
+      // Wait for flag to drop
+    } 
+    ADC12CTL0 &= ~ADC12SC;
+    uint16_t x_coord = ADC12MEM0; // ADC12MEM0 linked to A10, x-input
+    uint16_t y_coord = ADC12MEM1; // ADC12MEM1 linked to A4, y-input
+    uart_write_12bit(x_coord);    // Print x-coordinate to console
+    uart_write_char(' ');         // Readability space
+    uart_write_12bit(y_coord);    // Print y-coordinate to console
+    uart_write_char('\n');        // newline
+    P1OUT ^= redLED;              // toggle red LED
+    _delay_cycles(500000);        // 0.5 second delay
   }
 }
-

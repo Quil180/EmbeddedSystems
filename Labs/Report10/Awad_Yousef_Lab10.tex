@@ -1,0 +1,95 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{varwidth}
+\usepackage{xcolor}
+\usepackage{listings}
+
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{CStyle}{
+	language=C++,
+	backgroundcolor=\color{backcolour},   
+	commentstyle=\color{codegreen},
+	keywordstyle=\color{magenta},
+	numberstyle=\tiny\color{codegray},
+	stringstyle=\color{codepurple},
+	basicstyle=\ttfamily\footnotesize,
+	breakatwhitespace=false,         
+	breaklines=true,                 
+	keepspaces=true,                 
+	numbers=left,       
+	numbersep=5pt,                  
+	showspaces=false,                
+	showstringspaces=false,
+	showtabs=false,                  
+	tabsize=2,
+}
+\lstset{style=CStyle}
+
+\title{Lab 10 Report \\ \large EEL4742C - 00446}
+\author{Yousef Awad}
+\date{November 2025}
+\setcounter{secnumdepth}{0}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Introduction}
+This experiment investigates the advanced capabilities of the MSP430FR6989 Timer\_A module, focusing on using multiple channels to handle concurrent hardware events. Objectives include implementing simultaneous timing intervals to control independent LED flashing rates in continuous mode, generating Pulse Width Modulation (PWM) signals to adjust LED brightness without CPU intervention , and utilizing Input Capture mode to timestamp external user input.
+
+\section{10.1 Timer's Multiple Channels}
+The visual comparison appears to be the same/similar to what I set the values to be at. Alongside this here is the following derivation for the number of cycles for each channel:
+\lstinputlisting{10_1.c}
+\pagebreak
+
+\section{10.2 Using Three Channels}
+The durations, at least when tested by my stopwatch on my phone and on my watch, are close to the time's that I set (though, there was a slight error most likely due to human error).
+\newline
+\includegraphics[width=1\textwidth]{pictures/demo_showing_2_pictures.png}
+\lstinputlisting{10_2.c}
+\pagebreak
+
+\section{10.3 Driving a PWM Signal on the Pin}
+The brightness level, thankfully, is changed via the changing of TA0CCR1 in all the ranges.
+\lstinputlisting{10_3.c}
+\pagebreak
+
+\section{10.4 Timer Input Capture}
+The button push lasts \textbf{[answer here]}
+\lstinputlisting{10_4.c}
+\pagebreak
+
+\section{Student Q\&A}
+\subsection{1}
+\textbf{Given:} \textit{Is SPI implemented as simplex or full-duplex in this experiment?}
+SPI is only implmented as simplex as the Serial Data Out Pin does not transmit data back to the MCU. This means that there is only one lane of communication, thereby not being duplexed.
+
+\subsection{2}
+\textbf{Given:} \textit{What SPI clock frequency did we set up in this lab?}
+The SPI Clock Frequency was set to 8MHz as instructed in the lab manual...
+
+\subsection{3}
+\textbf{Given:} \textit{What I2C clock frequency did we set up in this lab?}
+The I2C Clock Frequency was set to 320KHz as was instructed by the lab manual....
+
+\subsection{4}
+\textbf{Given:} \textit{What is the maximum SPI clock frequency that is supported by the eUSCI module? Look in the microcontroller’s data sheet in Table 5-18.}
+The Maximum SPI Clock Frequency supported by the eUSCI Module for the MSP430 is 16MHz, according to the data sheet (Table 5-18, shown below).
+\newline
+\includegraphics[width=1\textwidth]{pictures/image.png}
+
+\subsection{5}
+\textbf{Given:} \textit{Show how you computed the I2C clock divider in the 3rd part.}
+To calculate the I2C Clock Divider for Part 3, I simply did teh following:
+$$ Clock = \frac{16MHz_{master\ clock}}{320KHz_{desired\ clock}} = \frac{16*10^6}{320*10^3} = 50 $$
+
+\section{Conclusion}
+
+\end{document}
