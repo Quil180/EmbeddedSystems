@@ -1,5 +1,10 @@
 #include "msp430fr6989.h"
 #include <stdint.h>
+#include <string.h>
+
+// UART Channels are P3.4 and P3.5 for transmit and recieve respectively
+#define transmit BIT4
+#define recieve BIT5
 
 #define redLED BIT0
 #define greenLED BIT7
@@ -44,13 +49,40 @@ void initialize_uart(void)
   UCA1CTLW0 |= UCSSEL_1;
 
   // Setting the dividers and enabling oversampling
-  UCA1BRW = 6; // SAME DIVIDER
+  UCA1BRW = 3; // SAME DIVIDER
   // setting the modulators and such
-  UCA1MCTLW = UCBRS1 | UCBRS2 | UCBRS3 | UCBRS5 | UCBRS6 | UCBRS7;
+  UCA1MCTLW = 0x9200;
 
   // Exiting the reset state
   UCA1CTLW0 &= ~UCSWRST;
   return;
+}
+
+// Converts an unsigned 16-bit integer to a null-terminated string (base 10).
+void custom_itoa(uint16_t number, char *buffer)
+{
+  unsigned int i = 0;
+
+  // Handle the special case of 0
+  if (number == 0)
+  {
+    buffer[i++] = '0';
+    buffer[i] = '\0';
+    return;
+  }
+
+  // Process individual digits
+  while (number > 0)
+  {
+    int remainder = number % 10;
+    buffer[i++] = remainder + '0'; // Convert digit to its ASCII character
+    number = number / 10;
+  }
+
+  buffer[i] = '\0'; // Null-terminate the string
+
+  // The digits are in reverse order, so we need to reverse the string
+  custom_strrev(buffer);
 }
 
 void uart_write_char(volatile unsigned char ch)
@@ -66,21 +98,33 @@ void uart_write_char(volatile unsigned char ch)
 
 void uart_write_string(char *string)
 {
-  int i; // counter
-  for (i = 0; i < strlen(string); i++)
+  unsigned int i; // counter
+  for (i = 0; string[i] != '\0'; i++) 
   {
-    uart_write_char(string[i]);
+  uart_write_char(string[i]);
   }
   return;
 }
 
-void uart_write_uint16(uint16_t number)
+char *uart_write_uint16(unsigned int n)
 {
-  // Converting the number via snprintf
-  char buffer[6]; // 5 characters is the max amount of characters for 65,536
-  custom_itoa(number, buffer);
-  uart_write_string(buffer);
-  return;
+  static char digits[6]; // 6 digits for null terminator
+  int i = 5;
+  digits[i] = '\0'; // adds null terminator
+
+  if (n == 0) 
+  {
+    digits[--i] = '0'; // For printing 0's
+  } 
+  else
+  {
+    while (n > 0 && i > 0)
+    {
+      digits[--i] = (n % 10) + '0';
+      n /= 10;
+    }
+  }
+  return &digits[i]; // Return pointer to start of the number
 }
 
 int main(void)
@@ -96,8 +140,9 @@ int main(void)
   P1REN  |= S1; // enable pull-up
   P1OUT  |= S1; // selecting pull-up
 
-  initialize_uart();
   config_ACLK_to_32KHz_crystal();
+  initialize_uart();
+
 
   /*
    * CM_3:   Capture on both edges
@@ -106,7 +151,7 @@ int main(void)
    * CCIE:   Enable Interrupts
    * SCS:    Synchronous Capture (sync w/ clock)
   */
-  TA0CCTL2 = CM_3 | CCIS_0 | CAP | CCIE | SCS;
+  TA0CCTL2 = CM_3 | CCIS_0 | CAP | CCIE;
 
   //       ACLK       /1     Continuous  Clear TAR
   TA0CTL = TASSEL_1 | ID_0 | MC_2      | TACLR;
@@ -123,12 +168,12 @@ __interrupt void T0A1_ISR()
   {
     uint16_t time = TA0CCR2;
 
-    uart_print_string("Time: ");
-    uart_print_uint16(time);
-    uart_printf_string("\r\n");
+    uart_write_string("Time: ");
+    uart_write_string(uart_write_uint16(time));
+    uart_write_string("\r\n");
 
-    // delay of 20ms
-    __delay_cycles(20000);
+    // delay
+    __delay_cycles(100);
 
     TA0CCTL2 &= ~CCIFG;
   }

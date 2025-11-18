@@ -47,8 +47,11 @@ int main(void)
 
   config_ACLK_to_32KHz_crystal();
 
-  TA0CCR0 = 819; // 0.1s for red
+  TA0CCR0   = 819;   // 0.1s for red
   TA0CCTL0 |= CCIE; // Enabling channel 1 interrupt
+
+  TA0CCR1   = 4096;  // Set initial compare value for green (0.5s)
+  TA0CCTL1 |= CCIE;  // Enabling channel 1 interrupt
 
   //       ACLK       /4     Continuous  Clear TAR
   TA0CTL = TASSEL_1 | ID_2 | MC_2      | TACLR;

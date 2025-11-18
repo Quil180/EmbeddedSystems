@@ -33,6 +33,10 @@ void Initialize_ADC(void)
   // X-axis: A10/P9.2, for A10 (P9DIR=x, P9SEL1=1, P9SEL0=1)
   P9SEL1 |= BIT2;
   P9SEL0 |= BIT2;
+  // Configure the pins to analog functionality (vertical)
+  // Y-axis: A4/P8.7, for A4 (P8DIR=x, P8SEL1=1, P8SEL0=1)
+  P9SEL1 |= BIT7; // bit 7 of P8
+  P9SEL0 |= BIT7; // bit 7 of P8
   // Turn on the ADC module
   ADC12CTL0 |= ADC12ON;
   // Turn off ENC (Enable Conversion) bit while modifying the configuration
@@ -41,7 +45,8 @@ void Initialize_ADC(void)
   // ADC12SHT0x sets SHT cycles for results 0-7, 24-31
   // ADC12MSC sets multiple analog inputs
   // Sets SHT of 16 cycles (found in doc. slau367o table 34.4)
-  ADC12CTL0 |= ADC12SHT0_2; 
+  ADC12CTL0 |= ADC12SHT0_2;
+  ADC12CTL0 |= ADC12MSC; // Set the bit ADC12MSC (Multiple Sample and Conversion) 
   //*************** ADC12CTL1 ***************
   // ADC12SHS sets read trigger
   // ADC12SHP sets SAMPCON use
@@ -52,6 +57,8 @@ void Initialize_ADC(void)
   ADC12CTL1 |= ADC12SHP;    // 1 = SAMPCON sourced from clock
   ADC12CTL1 |= ADC12DIV_0;  // 0 = /1
   ADC12CTL1 |= ADC12SSEL_0; // 0 = MODOSC
+  ADC12CTL1 |= ADC12CONSEQ_1; // Set ADC12CONSEQ (select sequence of channels)
+
   // ADC12CTL1 |= ADC12CONSEQ_1;
   // values in doc. slau367o table 34.5
   //*************** ADC12CTL2 ***************
@@ -64,6 +71,11 @@ void Initialize_ADC(void)
   // ADC12INCHx sets analog input
   ADC12MCTL0 |= ADC12VRSEL_0; // 0 -> VR+ = AVCC and VR- = AVSS
   ADC12MCTL0 |= ADC12INCH_10; // 10 = A10 input
+
+  ADC12MCTL1 |= ADC12VRSEL_0; // Set ADC12VRSEL (select VR+=AVCC, VR-=AVSS)
+  ADC12MCTL1 |= ADC12INCH_4; // Set ADC12INCH (select the analog channel that you found)
+  ADC12MCTL1 |= ADC12EOS; // Set ADC12EOS (last conversion in ADC12MEM1)
+
   //*************** ADC12MCTL1 ***************
   // set ENC bit at end of config
   ADC12CTL0 |= ADC12ENC;
@@ -83,7 +95,6 @@ int main(void)
   config_ACLK_to_32KHz_crystal();
 
   TA0CCR0  = 33;  // 33 cycles for 1000Hz
-  TA0CCTL0 = CCIE; // Enabling channel 0 interrupt
 
   TA0CCR1  = 15; // 50% brightness
   TA0CCTL1 = OUTMOD_7; // Reset/Set Output Mode
@@ -93,8 +104,6 @@ int main(void)
 
   // Initializing ADC
   Initialize_ADC();
-
-  _low_power_mode_3(); // We only need ACLK
 
   unsigned int x;
   unsigned int y;
@@ -116,13 +125,19 @@ int main(void)
       // Brightness is maximum
       TA0CCR1 = 32;
     }
-    if (y < DOWN)
+    else if (y < DOWN)
     {
       // Brightness is off
       TA0CCR1 = 0;
     }
-
-    if (x > UP)
+    else if (x > UP)
+    {
+      if (TA0CCR1 < 32)
+      {
+        TA0CCR1 += 1;
+      }
+    }
+    else if (x < DOWN)
     {
       if (TA0CCR1 > 0)
       {
@@ -130,15 +145,6 @@ int main(void)
       }
     }
 
-    if (x < DOWN)
-    {
-      if (TA0CCR1 < 32)
-      {
-        TA0CCR1 += 1;
-      }
-    }
-
     __delay_cycles(16000); // 1ms delay
   }
-  return 0;
 }
